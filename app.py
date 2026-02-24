@@ -309,8 +309,6 @@ def create_note():
     priority = int(b.get('priority', 0) or 0)
     tag_names = b.get('tags', [])
 
-    if not title:
-        return jsonify({'error': '请输入笔记标题'}), 400
     if not topic:
         return jsonify({'error': '请选择或创建主题'}), 400
 
@@ -354,8 +352,6 @@ def update_note(note_id):
     priority = int(b.get('priority', 0) or 0)
     tag_names = b.get('tags', [])
 
-    if not title:
-        return jsonify({'error': '请输入笔记标题'}), 400
     if not topic:
         return jsonify({'error': '请选择或创建主题'}), 400
 

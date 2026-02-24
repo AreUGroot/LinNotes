@@ -375,11 +375,28 @@ button {
 
 .topic-selector {
   display: flex;
-  gap: 10px;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+.topic-levels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.topic-levels select { min-width: 180px; }
+.topic-new-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
 }
-.topic-selector select { min-width: 200px; }
-.topic-selector input[type="text"] { flex: 1; max-width: 300px; }
+.topic-new-row input[type="text"] { flex: 1; min-width: 260px; }
+.topic-hint {
+  color: var(--sub);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
 
 /* ── Tag Multi-select ──────────────────────────────────────────────────── */
 .tag-selector {
@@ -798,7 +815,7 @@ button {
 
   <!-- Title -->
   <div class="form-row">
-    <div class="section-label">标题 *</div>
+    <div class="section-label">标题</div>
     <input type="text" id="note-title" class="full-width" placeholder="输入笔记标题，支持 $LaTeX$ 公式" style="width:100%;">
     <div id="note-title-preview" class="render-box title-preview-box"><span class="empty-hint">标题实时预览</span></div>
   </div>
@@ -807,11 +824,11 @@ button {
   <div class="form-row">
     <div class="section-label">主题 *</div>
     <div class="topic-selector">
-      <select id="note-topic">
-        <option value="">选择主题...</option>
-        <option value="__new__">+ 新建主题</option>
-      </select>
-      <input type="text" id="new-topic-input" placeholder="输入新主题名称" style="display:none;">
+      <div class="topic-levels" id="topic-levels"></div>
+      <div class="topic-new-row" id="topic-new-row" style="display:none;">
+        <input type="text" id="new-topic-input" placeholder="输入新主题名称，支持多级（如 代数/群论）">
+      </div>
+      <div class="topic-hint" id="topic-current-hint">当前主题：未选择</div>
     </div>
   </div>
 
@@ -944,6 +961,11 @@ let editingNoteId = null;
 let viewingNoteId = null;
 let selectedTags = [];
 let currentPriority = 0;
+const TOPIC_NEW_MARKER = '__new__';
+let topicFormState = {
+  segments: [],
+  pendingNewDepth: null,
+};
 
 /* ════════════════════════════════════════════════════════════════════════
    Utilities
@@ -968,6 +990,177 @@ function showMsg(elId, text, type) {
 }
 
 function $(id) { return document.getElementById(id); }
+
+function splitTopicPath(raw) {
+  return String(raw || '')
+    .split('/')
+    .map(s => s.trim())
+    .filter(Boolean);
+}
+
+function joinTopicPath(segments) {
+  return (segments || []).map(s => String(s || '').trim()).filter(Boolean).join(' / ');
+}
+
+function formatTopicLabel(raw) {
+  const parts = splitTopicPath(raw);
+  return parts.length ? joinTopicPath(parts) : String(raw || '').trim();
+}
+
+function buildTopicIndex() {
+  const childrenByPrefix = new Map();
+  const pathRawByNorm = new Map();
+
+  function addChild(prefix, child) {
+    if (!childrenByPrefix.has(prefix)) childrenByPrefix.set(prefix, new Set());
+    childrenByPrefix.get(prefix).add(child);
+  }
+
+  (allTopics || []).forEach(t => {
+    const raw = String((t && t.name) || '').trim();
+    const parts = splitTopicPath(raw);
+    if (!parts.length) return;
+    const norm = joinTopicPath(parts);
+    if (!pathRawByNorm.has(norm)) pathRawByNorm.set(norm, raw);
+    for (let i = 0; i < parts.length; i++) {
+      const prefix = joinTopicPath(parts.slice(0, i));
+      addChild(prefix, parts[i]);
+    }
+  });
+
+  return { childrenByPrefix, pathRawByNorm };
+}
+
+function getTopicChildren(index, prefixSegments) {
+  const key = joinTopicPath(prefixSegments);
+  return Array.from(index.childrenByPrefix.get(key) || []).sort((a, b) => a.localeCompare(b, 'zh-CN'));
+}
+
+function resetTopicFormState() {
+  topicFormState = { segments: [], pendingNewDepth: null };
+  $('new-topic-input').value = '';
+  renderTopicFormSelector();
+}
+
+function setTopicFormByRawTopic(rawTopic) {
+  topicFormState = {
+    segments: splitTopicPath(rawTopic),
+    pendingNewDepth: null,
+  };
+  $('new-topic-input').value = '';
+  renderTopicFormSelector();
+}
+
+function updateTopicCurrentHint() {
+  const hint = $('topic-current-hint');
+  const topic = getTopicValueFromForm({ preview: true });
+  hint.textContent = '当前主题：' + (topic ? formatTopicLabel(topic) : '未选择');
+}
+
+function renderTopicFormSelector() {
+  const container = $('topic-levels');
+  if (!container) return;
+
+  const index = buildTopicIndex();
+  const segments = topicFormState.segments || [];
+  const pendingNewDepth = topicFormState.pendingNewDepth;
+  const lastDepth = Math.max(segments.length, pendingNewDepth == null ? -1 : pendingNewDepth);
+  container.innerHTML = '';
+
+  for (let depth = 0; depth <= Math.max(0, lastDepth); depth++) {
+    if (depth > 0 && segments.length < depth) break;
+    const prefix = segments.slice(0, depth);
+    const children = getTopicChildren(index, prefix);
+    const select = document.createElement('select');
+    select.dataset.topicDepth = String(depth);
+
+    const currentVal = pendingNewDepth === depth
+      ? TOPIC_NEW_MARKER
+      : (depth < segments.length ? segments[depth] : '');
+
+    let firstLabel = '选择主题...';
+    if (depth > 0) firstLabel = '停在当前级（' + prefix[prefix.length - 1] + '）';
+    select.innerHTML = '<option value="">' + escapeHtml(firstLabel) + '</option>';
+
+    const optionValues = new Set(children);
+    if (currentVal && currentVal !== TOPIC_NEW_MARKER && !optionValues.has(currentVal)) {
+      optionValues.add(currentVal);
+      children.push(currentVal);
+      children.sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    }
+
+    children.forEach(name => {
+      select.innerHTML += '<option value="' + escapeHtml(name) + '">' + escapeHtml(name) + '</option>';
+    });
+
+    const newLabel = depth === 0 ? '+ 新建主题（支持多级）' : '+ 在当前级下新建主题';
+    select.innerHTML += '<option value="' + TOPIC_NEW_MARKER + '">' + escapeHtml(newLabel) + '</option>';
+    select.value = currentVal;
+    container.appendChild(select);
+  }
+
+  const newRow = $('topic-new-row');
+  const newInput = $('new-topic-input');
+  if (pendingNewDepth != null) {
+    const parentSegments = segments.slice(0, pendingNewDepth);
+    const parentText = joinTopicPath(parentSegments);
+    newRow.style.display = '';
+    newInput.placeholder = parentText
+      ? ('在 "' + parentText + '" 下输入新主题，支持多级（如 群论/表示论）')
+      : '输入新主题名称，支持多级（如 数学/代数）';
+  } else {
+    newRow.style.display = 'none';
+  }
+
+  updateTopicCurrentHint();
+}
+
+function handleTopicLevelChange(depth, value) {
+  const oldSegments = topicFormState.segments.slice();
+  const nextSegments = oldSegments.slice(0, depth);
+
+  if (!value) {
+    topicFormState = { segments: nextSegments, pendingNewDepth: null };
+    $('new-topic-input').value = '';
+    renderTopicFormSelector();
+    return;
+  }
+
+  if (value === TOPIC_NEW_MARKER) {
+    topicFormState = { segments: nextSegments, pendingNewDepth: depth };
+    renderTopicFormSelector();
+    return;
+  }
+
+  nextSegments.push(value);
+  topicFormState = { segments: nextSegments, pendingNewDepth: null };
+  $('new-topic-input').value = '';
+  renderTopicFormSelector();
+}
+
+function getTopicValueFromForm(opts = {}) {
+  const preview = !!opts.preview;
+  const segments = (topicFormState.segments || []).slice();
+  const pendingNewDepth = topicFormState.pendingNewDepth;
+
+  if (pendingNewDepth != null) {
+    const parentSegments = segments.slice(0, pendingNewDepth);
+    const suffixParts = splitTopicPath($('new-topic-input').value);
+    if (!suffixParts.length) {
+      if (preview) return joinTopicPath(parentSegments);
+      return '';
+    }
+    const fullParts = parentSegments.concat(suffixParts);
+    const norm = joinTopicPath(fullParts);
+    const index = buildTopicIndex();
+    return index.pathRawByNorm.get(norm) || norm;
+  }
+
+  if (!segments.length) return '';
+  const norm = joinTopicPath(segments);
+  const index = buildTopicIndex();
+  return index.pathRawByNorm.get(norm) || norm;
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    Auth System
@@ -1209,19 +1402,12 @@ function fillTopicSelectors() {
   const fVal = fSel.value;
   fSel.innerHTML = '<option value="">所有主题</option>';
   allTopics.forEach(t => {
-    fSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</option>';
+    fSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(formatTopicLabel(t.name)) + '</option>';
   });
   fSel.value = fVal;
 
   // Form
-  const nSel = $('note-topic');
-  const nVal = nSel.value;
-  nSel.innerHTML = '<option value="">选择主题...</option>';
-  allTopics.forEach(t => {
-    nSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</option>';
-  });
-  nSel.innerHTML += '<option value="__new__">+ 新建主题</option>';
-  nSel.value = nVal;
+  renderTopicFormSelector();
 }
 
 function fillTagFilter() {
@@ -1262,7 +1448,7 @@ function renderNoteList() {
     return '<div class="note-card" data-id="' + note.id + '">' +
       '<div class="note-card-title" data-katex>' + escapeHtml(note.title) + '</div>' +
       '<div class="note-card-meta">' +
-        '<span class="badge-topic">' + escapeHtml(note.topic) + '</span>' +
+        '<span class="badge-topic">' + escapeHtml(formatTopicLabel(note.topic)) + '</span>' +
         tagsHtml +
         renderStars(note.priority) +
         '<span>创建: ' + formatTime(note.created_at) + '</span>' +
@@ -1423,9 +1609,7 @@ function openCreateForm() {
   $('form-title-label').textContent = '添加笔记';
   $('note-title').value = '';
   renderTitlePreview('');
-  $('note-topic').value = '';
-  $('new-topic-input').value = '';
-  $('new-topic-input').style.display = 'none';
+  resetTopicFormState();
   $('note-editor-md').value = '';
   $('note-preview').innerHTML = '<span class="empty-hint">暂无内容</span>';
   selectedTags = [];
@@ -1446,23 +1630,7 @@ async function openEditForm(noteId) {
     $('note-title').value = note.title;
     renderTitlePreview(note.title || '');
 
-    // Set topic
-    const topicSel = $('note-topic');
-    // Ensure option exists
-    let found = false;
-    for (const opt of topicSel.options) {
-      if (opt.value === note.topic) { found = true; break; }
-    }
-    if (!found && note.topic) {
-      // Insert before __new__
-      const newOpt = document.createElement('option');
-      newOpt.value = note.topic;
-      newOpt.textContent = note.topic;
-      const lastOpt = topicSel.querySelector('option[value="__new__"]');
-      topicSel.insertBefore(newOpt, lastOpt);
-    }
-    topicSel.value = note.topic;
-    $('new-topic-input').style.display = 'none';
+    setTopicFormByRawTopic(note.topic || '');
 
     $('note-editor-md').value = note.content || '';
     selectedTags = note.tags || [];
@@ -1476,18 +1644,13 @@ async function openEditForm(noteId) {
 
 async function saveNote() {
   const title = $('note-title').value.trim();
-  let topic = $('note-topic').value;
+  const topic = getTopicValueFromForm();
 
-  if (topic === '__new__') {
-    topic = $('new-topic-input').value.trim();
-    if (!topic) {
-      showMsg('form-msg', '请输入新主题名称', 'err');
-      return;
-    }
+  if (!topic) {
+    const needNewName = topicFormState.pendingNewDepth != null;
+    showMsg('form-msg', needNewName ? '请输入新主题名称' : '请选择或创建主题', 'err');
+    return;
   }
-
-  if (!title) { showMsg('form-msg', '请输入笔记标题', 'err'); return; }
-  if (!topic) { showMsg('form-msg', '请选择或创建主题', 'err'); return; }
 
   const body = {
     title,
@@ -1547,7 +1710,7 @@ async function openNoteDetail(noteId) {
     ).join('');
 
     $('detail-meta').innerHTML =
-      '<span class="badge-topic">' + escapeHtml(note.topic) + '</span>' +
+      '<span class="badge-topic">' + escapeHtml(formatTopicLabel(note.topic)) + '</span>' +
       tagsHtml +
       renderStars(note.priority) +
       '<span>创建: ' + formatTime(note.created_at) + '</span>' +
@@ -2007,9 +2170,13 @@ $('btn-add-question').addEventListener('click', () => {
   });
 });
 
-$('note-topic').addEventListener('change', function() {
-  $('new-topic-input').style.display = this.value === '__new__' ? '' : 'none';
+$('topic-levels').addEventListener('change', (e) => {
+  const sel = e.target.closest('select[data-topic-depth]');
+  if (!sel) return;
+  handleTopicLevelChange(parseInt(sel.dataset.topicDepth, 10), sel.value);
 });
+
+$('new-topic-input').addEventListener('input', updateTopicCurrentHint);
 
 $('filter-topic').addEventListener('change', loadNotes);
 $('filter-tag').addEventListener('change', loadNotes);
@@ -2023,6 +2190,7 @@ marked.setOptions({ breaks: true, gfm: true });
 /* ════════════════════════════════════════════════════════════════════════
    Init
    ════════════════════════════════════════════════════════════════════════ */
+renderTopicFormSelector();
 restoreSession();
 </script>
 </body>
