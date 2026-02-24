@@ -365,6 +365,13 @@ button {
 .form-row input[type="text"].full-width {
   width: 100%;
 }
+.title-preview-box {
+  margin-top: 10px;
+  min-height: 48px;
+  padding: 10px 12px;
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
 
 .topic-selector {
   display: flex;
@@ -793,6 +800,7 @@ button {
   <div class="form-row">
     <div class="section-label">标题 *</div>
     <input type="text" id="note-title" class="full-width" placeholder="输入笔记标题，支持 $LaTeX$ 公式" style="width:100%;">
+    <div id="note-title-preview" class="render-box title-preview-box"><span class="empty-hint">标题实时预览</span></div>
   </div>
 
   <!-- Topic -->
@@ -1104,6 +1112,16 @@ function renderMarkdownKatex(src, container) {
   container.innerHTML = html;
 }
 
+function renderTitlePreview(src) {
+  const container = $('note-title-preview');
+  if (!src || !src.trim()) {
+    container.innerHTML = '<span class="empty-hint">标题实时预览</span>';
+    return;
+  }
+  container.textContent = src;
+  renderMathInElement(container, KATEX_OPTS);
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    Floating KaTeX Preview
    ════════════════════════════════════════════════════════════════════════ */
@@ -1126,8 +1144,12 @@ function showFP(el) {
   clearTimeout(fpTimeout);
   const text = el.value || '';
   if (!text.trim()) { fp.style.display = 'none'; return; }
-  fpBody.textContent = text;
-  renderMathInElement(fpBody, KATEX_OPTS);
+  if (el.id === 'note-editor-md') {
+    renderMarkdownKatex(text, fpBody);
+  } else {
+    fpBody.textContent = text;
+    renderMathInElement(fpBody, KATEX_OPTS);
+  }
   placeFP(el);
   fp.style.display = '';
 }
@@ -1400,6 +1422,7 @@ function openCreateForm() {
   editingNoteId = null;
   $('form-title-label').textContent = '添加笔记';
   $('note-title').value = '';
+  renderTitlePreview('');
   $('note-topic').value = '';
   $('new-topic-input').value = '';
   $('new-topic-input').style.display = 'none';
@@ -1421,6 +1444,7 @@ async function openEditForm(noteId) {
     editingNoteId = noteId;
     $('form-title-label').textContent = '编辑笔记';
     $('note-title').value = note.title;
+    renderTitlePreview(note.title || '');
 
     // Set topic
     const topicSel = $('note-topic');
@@ -1607,12 +1631,20 @@ $('note-editor-md').addEventListener('paste', async (e) => {
    ════════════════════════════════════════════════════════════════════════ */
 $('note-editor-md').addEventListener('input', function() {
   renderMarkdownKatex(this.value, $('note-preview'));
+  showFP(this);
 });
+$('note-editor-md').addEventListener('focus', function() {
+  showFP(this);
+});
+$('note-editor-md').addEventListener('blur', hideFP);
 
 // Float preview for title input
 const titleInput = $('note-title');
 titleInput.addEventListener('focus', () => showFP(titleInput));
-titleInput.addEventListener('input', () => showFP(titleInput));
+titleInput.addEventListener('input', () => {
+  renderTitlePreview(titleInput.value);
+  showFP(titleInput);
+});
 titleInput.addEventListener('blur', hideFP);
 
 /* ════════════════════════════════════════════════════════════════════════
