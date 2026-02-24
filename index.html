@@ -392,6 +392,7 @@ button {
   align-items: center;
 }
 .topic-new-row input[type="text"] { flex: 1; min-width: 260px; }
+.topic-new-row button { white-space: nowrap; }
 .topic-hint {
   color: var(--sub);
   font-size: 0.8rem;
@@ -827,6 +828,7 @@ button {
       <div class="topic-levels" id="topic-levels"></div>
       <div class="topic-new-row" id="topic-new-row" style="display:none;">
         <input type="text" id="new-topic-input" placeholder="输入新主题名称，支持多级（如 代数/群论）">
+        <button type="button" class="btn-ghost" id="btn-topic-commit-level">确认并继续下一级</button>
       </div>
       <div class="topic-hint" id="topic-current-hint">当前主题：未选择</div>
     </div>
@@ -1057,6 +1059,27 @@ function updateTopicCurrentHint() {
   hint.textContent = '当前主题：' + (topic ? formatTopicLabel(topic) : '未选择');
 }
 
+function getPendingTopicInputParts() {
+  return splitTopicPath($('new-topic-input').value);
+}
+
+function commitPendingTopicToSegments() {
+  const pendingNewDepth = topicFormState.pendingNewDepth;
+  if (pendingNewDepth == null) return false;
+
+  const baseSegments = (topicFormState.segments || []).slice(0, pendingNewDepth);
+  const suffixParts = getPendingTopicInputParts();
+  if (!suffixParts.length) return false;
+
+  topicFormState = {
+    segments: baseSegments.concat(suffixParts),
+    pendingNewDepth: null,
+  };
+  $('new-topic-input').value = '';
+  renderTopicFormSelector();
+  return true;
+}
+
 function renderTopicFormSelector() {
   const container = $('topic-levels');
   if (!container) return;
@@ -1108,8 +1131,10 @@ function renderTopicFormSelector() {
     newInput.placeholder = parentText
       ? ('在 "' + parentText + '" 下输入新主题，支持多级（如 群论/表示论）')
       : '输入新主题名称，支持多级（如 数学/代数）';
+    $('btn-topic-commit-level').disabled = getPendingTopicInputParts().length === 0;
   } else {
     newRow.style.display = 'none';
+    $('btn-topic-commit-level').disabled = true;
   }
 
   updateTopicCurrentHint();
@@ -2176,7 +2201,26 @@ $('topic-levels').addEventListener('change', (e) => {
   handleTopicLevelChange(parseInt(sel.dataset.topicDepth, 10), sel.value);
 });
 
-$('new-topic-input').addEventListener('input', updateTopicCurrentHint);
+$('new-topic-input').addEventListener('input', () => {
+  updateTopicCurrentHint();
+  if (topicFormState.pendingNewDepth != null) {
+    $('btn-topic-commit-level').disabled = getPendingTopicInputParts().length === 0;
+  }
+});
+
+$('new-topic-input').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if (topicFormState.pendingNewDepth == null) return;
+  if (getPendingTopicInputParts().length === 0) return;
+  e.preventDefault();
+  commitPendingTopicToSegments();
+});
+
+$('btn-topic-commit-level').addEventListener('click', () => {
+  if (!commitPendingTopicToSegments()) {
+    showMsg('form-msg', '请输入新主题名称', 'err');
+  }
+});
 
 $('filter-topic').addEventListener('change', loadNotes);
 $('filter-tag').addEventListener('change', loadNotes);
