@@ -1,0 +1,1997 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lin的笔记</title>
+<link rel="stylesheet" href="vendor/katex/katex.min.css">
+<style>
+/* ── Reset ──────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Root ───────────────────────────────────────────────────────────────── */
+:root {
+  --pri:   #5a67d8;
+  --pri2:  #9f7aea;
+  --bg:    #f0f2f7;
+  --white: #ffffff;
+  --text:  #2d3748;
+  --sub:   #718096;
+  --bdr:   #e2e8f0;
+  --card:  #ffffff;
+  --nav-h: 56px;
+}
+
+html, body {
+  height: 100%;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* ── Top Nav ─────────────────────────────────────────────────────────────── */
+.top-nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: var(--nav-h);
+  background: var(--white);
+  border-bottom: 1px solid var(--bdr);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 8px;
+  z-index: 100;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.top-nav .brand {
+  font-weight: 700;
+  font-size: 1.1rem;
+  background: linear-gradient(135deg, var(--pri), var(--pri2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-right: 24px;
+  white-space: nowrap;
+}
+
+.top-nav .spacer { margin-left: auto; }
+.account-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#auth-user-label {
+  color: var(--sub);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+/* ── Page wrapper ───────────────────────────────────────────────────────── */
+.page {
+  display: none;
+  min-height: 100vh;
+}
+.page.active { display: block; }
+
+/* ── Shared form elements ───────────────────────────────────────────────── */
+select, input[type="text"], input[type="password"] {
+  padding: 7px 10px;
+  border: 1.5px solid var(--bdr);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: var(--white);
+  outline: none;
+  transition: border-color 0.18s;
+}
+select:focus, input[type="text"]:focus, input[type="password"]:focus { border-color: var(--pri); }
+
+textarea {
+  border: 1.5px solid var(--bdr);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.87rem;
+  line-height: 1.65;
+  outline: none;
+  background: #f7fafc;
+  color: var(--text);
+  transition: border-color 0.18s, background 0.18s;
+  resize: vertical;
+}
+textarea:focus { border-color: var(--pri); background: var(--white); }
+textarea::placeholder { color: #c0cfe0; }
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: all 0.18s;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--pri), var(--pri2));
+  color: white;
+  padding: 8px 20px;
+  box-shadow: 0 2px 8px rgba(90,103,216,0.3);
+}
+.btn-primary:hover { opacity: 0.9; transform: translateY(-1px); }
+.btn-primary:active { transform: translateY(0); }
+
+.btn-ghost {
+  background: #eef0fd;
+  color: var(--pri);
+  padding: 7px 14px;
+  border: 1.5px solid #c3cbf7;
+}
+.btn-ghost:hover { background: #e0e4f9; }
+
+.btn-danger {
+  background: #fff5f5;
+  color: #e53e3e;
+  padding: 7px 14px;
+  border: 1.5px solid #fed7d7;
+}
+.btn-danger:hover { background: #fed7d7; }
+
+.render-box {
+  background: var(--white);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  padding: 16px 20px;
+  min-height: 80px;
+  line-height: 1.9;
+  font-size: 0.95rem;
+  overflow-x: auto;
+  word-break: break-word;
+}
+.render-box .katex-display { margin: 8px 0; overflow-x: auto; }
+.render-box img { max-width: 100%; border-radius: 8px; margin: 8px 0; }
+.render-box pre {
+  background: #f7fafc;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  padding: 12px;
+  overflow-x: auto;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  font-size: 0.85rem;
+}
+.render-box code {
+  background: #edf2f7;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Fira Code', 'Courier New', monospace;
+  color: #553c9a;
+  font-size: 0.88rem;
+}
+.render-box pre code { background: none; padding: 0; }
+.render-box h1, .render-box h2, .render-box h3, .render-box h4 {
+  margin-top: 16px; margin-bottom: 8px; font-weight: 600;
+}
+.render-box h1 { font-size: 1.4rem; }
+.render-box h2 { font-size: 1.2rem; }
+.render-box h3 { font-size: 1.05rem; }
+.render-box ul, .render-box ol { padding-left: 24px; margin: 6px 0; }
+.render-box blockquote {
+  border-left: 3px solid var(--pri);
+  padding-left: 12px;
+  color: var(--sub);
+  margin: 8px 0;
+}
+.render-box table { border-collapse: collapse; margin: 8px 0; width: 100%; }
+.render-box th, .render-box td {
+  border: 1px solid var(--bdr);
+  padding: 6px 10px;
+  text-align: left;
+  font-size: 0.88rem;
+}
+.render-box th { background: #f7fafc; font-weight: 600; }
+
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--sub);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 8px;
+}
+
+.msg-ok  { color: #38a169; font-size: 0.82rem; margin-top: 6px; }
+.msg-err { color: #e53e3e; font-size: 0.82rem; margin-top: 6px; }
+
+.empty-hint {
+  color: var(--sub);
+  font-size: 0.85rem;
+  text-align: center;
+  padding: 40px 0;
+}
+
+/* ── Auth overlay / modal ──────────────────────────────────────────────── */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(240,242,247,0.92);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--white);
+  border: 1px solid var(--bdr);
+  border-radius: 16px;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.12);
+  padding: 28px;
+}
+.auth-card h3 {
+  font-size: 1.15rem;
+  margin-bottom: 6px;
+  background: linear-gradient(135deg, var(--pri), var(--pri2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.auth-card p {
+  color: var(--sub);
+  font-size: 0.82rem;
+  margin-bottom: 16px;
+}
+.auth-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.auth-row label {
+  color: var(--sub);
+  font-size: 0.8rem;
+}
+.auth-row input { width: 100%; }
+.auth-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.auth-actions .btn-primary { flex: 1; }
+
+/* ── Note List View ────────────────────────────────────────────────────── */
+#view-list {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+.list-header h2 { font-size: 1.25rem; font-weight: 700; }
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 12px 16px;
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+}
+.filter-bar select { min-width: 130px; }
+
+.note-card {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 12px;
+  transition: box-shadow 0.18s, border-color 0.18s;
+  cursor: pointer;
+}
+.note-card:hover {
+  border-color: #c3cbf7;
+  box-shadow: 0 4px 16px rgba(90,103,216,0.1);
+}
+.note-card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+.note-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--sub);
+}
+
+.badge-topic {
+  background: #eef0fd;
+  color: var(--pri);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-tag {
+  background: #f0fdf4;
+  color: #38a169;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+}
+.stars-display {
+  color: #ecc94b;
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+.stars-display .empty-star { color: #e2e8f0; }
+
+/* ── Note Form View ────────────────────────────────────────────────────── */
+#view-form {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.form-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.form-header h2 { font-size: 1.15rem; font-weight: 700; }
+
+.form-row {
+  margin-bottom: 20px;
+}
+.form-row > .section-label { margin-bottom: 8px; }
+
+.form-row input[type="text"].full-width {
+  width: 100%;
+}
+
+.topic-selector {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.topic-selector select { min-width: 200px; }
+.topic-selector input[type="text"] { flex: 1; max-width: 300px; }
+
+/* ── Tag Multi-select ──────────────────────────────────────────────────── */
+.tag-selector {
+  position: relative;
+  max-width: 500px;
+}
+.tag-selector-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 8px;
+  border: 1.5px solid var(--bdr);
+  border-radius: 8px;
+  min-height: 36px;
+  cursor: text;
+  background: var(--white);
+  transition: border-color 0.18s;
+  align-items: center;
+}
+.tag-selector-input.focused { border-color: var(--pri); }
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: #f0fdf4;
+  color: #38a169;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+.tag-chip-remove {
+  cursor: pointer;
+  color: #68d391;
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.tag-chip-remove:hover { color: #e53e3e; }
+.tag-input-inner {
+  border: none;
+  outline: none;
+  font-size: 0.85rem;
+  min-width: 80px;
+  flex: 1;
+  padding: 2px 4px;
+  background: transparent;
+  color: var(--text);
+}
+.tag-input-inner::placeholder { color: #c0cfe0; }
+.tag-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--white);
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 50;
+  display: none;
+  margin-top: 4px;
+}
+.tag-dropdown.open { display: block; }
+.tag-option {
+  padding: 7px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.12s;
+}
+.tag-option:hover { background: #eef0fd; color: var(--pri); }
+.tag-option.add-new {
+  color: var(--pri);
+  font-weight: 500;
+  border-top: 1px solid var(--bdr);
+}
+
+/* ── Star Rating ───────────────────────────────────────────────────────── */
+.stars-input {
+  display: inline-flex;
+  gap: 4px;
+}
+.star-btn {
+  background: none;
+  border: none;
+  padding: 2px;
+  font-size: 1.3rem;
+  color: #e2e8f0;
+  cursor: pointer;
+  transition: color 0.12s, transform 0.12s;
+  line-height: 1;
+}
+.star-btn.filled { color: #ecc94b; }
+.star-btn:hover { color: #d69e2e; transform: scale(1.15); }
+
+/* ── Markdown Split Editor ─────────────────────────────────────────────── */
+.editor-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.editor-toolbar button {
+  background: #edf2f7;
+  color: var(--sub);
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+.editor-toolbar button:hover { background: #e2e8f0; color: var(--text); }
+.editor-toolbar .hint {
+  color: var(--sub);
+  font-size: 0.78rem;
+  margin-left: auto;
+}
+
+.editor-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 800px) { .editor-split { grid-template-columns: 1fr; } }
+
+.editor-col { display: flex; flex-direction: column; }
+.editor-col .section-label { margin-bottom: 6px; }
+
+#note-editor-md {
+  width: 100%;
+  min-height: 400px;
+  flex: 1;
+  resize: vertical;
+}
+
+#note-preview {
+  min-height: 400px;
+  flex: 1;
+}
+
+.form-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--bdr);
+}
+
+/* ── Note Detail View ──────────────────────────────────────────────────── */
+#view-detail {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.detail-header {
+  margin-bottom: 20px;
+}
+.detail-back {
+  margin-bottom: 16px;
+}
+.detail-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+.detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--sub);
+  margin-bottom: 16px;
+}
+.detail-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.detail-body {
+  min-height: 200px;
+}
+
+/* ── Comments & Questions ──────────────────────────────────────────────── */
+.cq-section {
+  margin-top: 28px;
+}
+.cq-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.cq-section-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.cq-add-btn {
+  background: #eef0fd;
+  color: var(--pri);
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  border: 1.5px solid #c3cbf7;
+}
+.cq-add-btn:hover { background: #e0e4f9; }
+
+.cq-item {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+.cq-item.is-reply {
+  margin-left: 32px;
+  border-left: 3px solid #c3cbf7;
+}
+.cq-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  color: var(--sub);
+}
+.cq-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+.cq-icon.question { color: #d97706; }
+.cq-icon.resolved { color: #38a169; }
+.cq-item-body {
+  line-height: 1.8;
+  font-size: 0.92rem;
+  word-break: break-word;
+}
+.cq-item-body .katex-display { margin: 6px 0; }
+.cq-item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cq-item-actions button {
+  font-size: 0.78rem;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: #f7fafc;
+  color: var(--sub);
+  border: 1px solid var(--bdr);
+}
+.cq-item-actions button:hover { background: #edf2f7; color: var(--text); }
+.cq-item-actions .btn-resolve {
+  color: #38a169;
+  border-color: #c6f6d5;
+}
+.cq-item-actions .btn-resolve:hover { background: #f0fff4; }
+.cq-item-actions .btn-unresolve {
+  color: #d97706;
+  border-color: #fefcbf;
+}
+.cq-item-actions .btn-unresolve:hover { background: #fffff0; }
+.cq-item-actions .btn-delete-cq {
+  color: #e53e3e;
+  border-color: #fed7d7;
+}
+.cq-item-actions .btn-delete-cq:hover {
+  background: #fff5f5;
+  color: #c53030;
+}
+
+/* ── Inline KaTeX input box (for comment/question) ─────────────────────── */
+.cq-input-box {
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+.cq-input-box.is-reply {
+  margin-left: 32px;
+}
+.cq-input-box textarea {
+  width: 100%;
+  min-height: 70px;
+  resize: vertical;
+}
+.cq-input-box .cq-input-preview {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f7fafc;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  min-height: 36px;
+  line-height: 1.8;
+  font-size: 0.92rem;
+  word-break: break-word;
+}
+.cq-input-box .cq-input-preview .katex-display { margin: 4px 0; }
+.cq-input-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cq-input-actions .btn-submit {
+  background: linear-gradient(135deg, var(--pri), var(--pri2));
+  color: white;
+  padding: 5px 16px;
+  font-size: 0.82rem;
+}
+.cq-input-actions .btn-cancel {
+  background: #edf2f7;
+  color: var(--sub);
+  padding: 5px 16px;
+  font-size: 0.82rem;
+}
+
+/* ── Floating KaTeX preview ─────────────────────────────────────────────── */
+#float-preview {
+  position: fixed;
+  display: none;
+  z-index: 9999;
+  width: 420px;
+  max-width: calc(100vw - 24px);
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.15), 0 2px 8px rgba(0,0,0,0.08);
+  border: 1px solid rgba(90,103,216,0.2);
+}
+#fp-header {
+  background: linear-gradient(135deg, var(--pri), var(--pri2));
+  color: white;
+  padding: 8px 14px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+#fp-body {
+  padding: 12px 16px;
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 0.95rem;
+  line-height: 2;
+  word-break: break-word;
+}
+#fp-body .katex-display { margin: 6px 0; overflow-x: auto; }
+</style>
+</head>
+<body>
+
+<!-- ── Top Navigation ──────────────────────────────────────────────────── -->
+<nav class="top-nav">
+  <span class="brand">Lin的笔记</span>
+  <span class="spacer"></span>
+  <div class="account-box">
+    <span id="auth-user-label">未登录</span>
+    <button class="btn-ghost" id="btn-logout" style="display:none;">退出登录</button>
+  </div>
+</nav>
+
+<!-- ── Auth Overlay ────────────────────────────────────────────────────── -->
+<div id="auth-overlay" class="auth-overlay">
+  <div class="auth-card">
+    <h3>Lin的笔记</h3>
+    <p>请登录以管理你的笔记。</p>
+    <div class="auth-row">
+      <label for="login-username">用户名</label>
+      <input id="login-username" type="text" placeholder="请输入用户名" autocomplete="username">
+    </div>
+    <div class="auth-row">
+      <label for="login-password">密码</label>
+      <input id="login-password" type="password" placeholder="请输入密码" autocomplete="current-password">
+    </div>
+    <div class="auth-actions">
+      <button class="btn-primary" id="btn-login">登录</button>
+    </div>
+    <div id="login-msg"></div>
+  </div>
+</div>
+
+<!-- ── View: Note List ─────────────────────────────────────────────────── -->
+<div id="view-list" class="page active">
+  <div class="list-header">
+    <h2>我的笔记</h2>
+    <button class="btn-primary" id="btn-add-note">+ 添加笔记</button>
+  </div>
+
+  <div class="filter-bar">
+    <select id="filter-topic"><option value="">所有主题</option></select>
+    <select id="filter-tag"><option value="">所有标签</option></select>
+    <select id="filter-sort">
+      <option value="updated_desc">最近修改</option>
+      <option value="created_desc">最新创建</option>
+      <option value="created_asc">最早创建</option>
+      <option value="priority_desc">优先级 高→低</option>
+      <option value="priority_asc">优先级 低→高</option>
+    </select>
+  </div>
+
+  <div id="note-list"></div>
+</div>
+
+<!-- ── View: Note Form (Create/Edit) ───────────────────────────────────── -->
+<div id="view-form" class="page">
+  <div class="form-header">
+    <button class="btn-ghost" id="btn-back-to-list">← 返回</button>
+    <h2 id="form-title-label">添加笔记</h2>
+  </div>
+
+  <!-- Title -->
+  <div class="form-row">
+    <div class="section-label">标题 *</div>
+    <input type="text" id="note-title" class="full-width" placeholder="输入笔记标题，支持 $LaTeX$ 公式" style="width:100%;">
+  </div>
+
+  <!-- Topic -->
+  <div class="form-row">
+    <div class="section-label">主题 *</div>
+    <div class="topic-selector">
+      <select id="note-topic">
+        <option value="">选择主题...</option>
+        <option value="__new__">+ 新建主题</option>
+      </select>
+      <input type="text" id="new-topic-input" placeholder="输入新主题名称" style="display:none;">
+    </div>
+  </div>
+
+  <!-- Tags -->
+  <div class="form-row">
+    <div class="section-label">标签</div>
+    <div class="tag-selector" id="tag-selector">
+      <div class="tag-selector-input" id="tag-selector-input">
+        <input type="text" class="tag-input-inner" id="tag-input" placeholder="输入或选择标签...">
+      </div>
+      <div class="tag-dropdown" id="tag-dropdown"></div>
+    </div>
+  </div>
+
+  <!-- Priority -->
+  <div class="form-row">
+    <div class="section-label">优先级</div>
+    <div class="stars-input" id="priority-stars">
+      <button type="button" class="star-btn" data-val="1">★</button>
+      <button type="button" class="star-btn" data-val="2">★</button>
+      <button type="button" class="star-btn" data-val="3">★</button>
+      <button type="button" class="star-btn" data-val="4">★</button>
+      <button type="button" class="star-btn" data-val="5">★</button>
+    </div>
+  </div>
+
+  <!-- Markdown Editor -->
+  <div class="form-row">
+    <div class="section-label">正文</div>
+    <div class="editor-toolbar">
+      <button type="button" id="btn-upload-img">📷 插入图片</button>
+      <input type="file" id="img-file-input" accept="image/*" style="display:none;">
+      <span class="hint">支持 Ctrl+V / Cmd+V 粘贴图片</span>
+    </div>
+    <div class="editor-split">
+      <div class="editor-col">
+        <div class="section-label">Markdown 编辑</div>
+        <textarea id="note-editor-md" placeholder="在此输入笔记内容...&#10;&#10;支持 Markdown 和 LaTeX 公式：&#10;- 行内公式：$E = mc^2$&#10;- 块级公式：$$\int_0^\infty e^{-x} dx = 1$$"></textarea>
+      </div>
+      <div class="editor-col">
+        <div class="section-label">实时预览</div>
+        <div id="note-preview" class="render-box"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Save -->
+  <div class="form-actions">
+    <button class="btn-primary" id="btn-save-note">保存笔记</button>
+    <span id="form-msg"></span>
+  </div>
+</div>
+
+<!-- ── View: Note Detail ───────────────────────────────────────────────── -->
+<div id="view-detail" class="page">
+  <div class="detail-back">
+    <button class="btn-ghost" id="btn-back-from-detail">← 返回列表</button>
+  </div>
+  <div class="detail-header">
+    <div class="detail-title" id="detail-title"></div>
+    <div class="detail-meta" id="detail-meta"></div>
+  </div>
+  <div class="detail-actions">
+    <button class="btn-primary" id="btn-edit-note">编辑</button>
+    <button class="btn-danger" id="btn-delete-note">删除</button>
+  </div>
+  <div class="detail-body render-box" id="detail-body"></div>
+
+  <!-- Comments Section -->
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>评论</h3>
+      <button class="cq-add-btn" id="btn-add-comment">+ 添加评论</button>
+    </div>
+    <div id="comment-input-area"></div>
+    <div id="comment-list"></div>
+  </div>
+
+  <!-- Questions Section -->
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>问题</h3>
+      <button class="cq-add-btn" id="btn-add-question">+ 添加问题</button>
+    </div>
+    <div id="question-input-area"></div>
+    <div id="question-list"></div>
+  </div>
+</div>
+
+<!-- ── Floating KaTeX Preview ──────────────────────────────────────────── -->
+<div id="float-preview">
+  <div id="fp-header">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+      <path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
+    </svg>
+    实时预览
+  </div>
+  <div id="fp-body"></div>
+</div>
+
+<!-- ── Scripts ──────────────────────────────────────────────────────────── -->
+<script src="vendor/marked/marked.min.js"></script>
+<script src="vendor/katex/katex.min.js"></script>
+<script src="vendor/katex/contrib/auto-render.min.js"></script>
+<script>
+'use strict';
+
+/* ════════════════════════════════════════════════════════════════════════
+   Constants & State
+   ════════════════════════════════════════════════════════════════════════ */
+const KATEX_OPTS = {
+  delimiters: [
+    { left: '$$',  right: '$$',  display: true  },
+    { left: '$',   right: '$',   display: false },
+    { left: '\\[', right: '\\]', display: true  },
+    { left: '\\(', right: '\\)', display: false },
+  ],
+  throwOnError: false,
+  errorColor: '#e53e3e',
+};
+
+const AUTH_KEY = 'lin-notes-auth';
+let authState = { token: '', username: '' };
+
+let allNotes = [];
+let allTopics = [];
+let allTags = [];
+let currentView = 'list';
+let editingNoteId = null;
+let viewingNoteId = null;
+let selectedTags = [];
+let currentPriority = 0;
+
+/* ════════════════════════════════════════════════════════════════════════
+   Utilities
+   ════════════════════════════════════════════════════════════════════════ */
+function escapeHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'Z');
+  return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+}
+
+function showMsg(elId, text, type) {
+  const el = document.getElementById(elId);
+  el.textContent = text;
+  el.className = type === 'ok' ? 'msg-ok' : 'msg-err';
+  setTimeout(() => { el.textContent = ''; el.className = ''; }, 2500);
+}
+
+function $(id) { return document.getElementById(id); }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Auth System
+   ════════════════════════════════════════════════════════════════════════ */
+function loadAuthState() {
+  try {
+    const s = localStorage.getItem(AUTH_KEY);
+    if (s) authState = JSON.parse(s);
+  } catch(e) {}
+}
+
+function persistAuthState() {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(authState));
+}
+
+function clearAuthState() {
+  authState = { token: '', username: '' };
+  localStorage.removeItem(AUTH_KEY);
+  setLoggedInUI(false);
+}
+
+function setLoggedInUI(loggedIn) {
+  $('auth-overlay').style.display = loggedIn ? 'none' : 'flex';
+  $('btn-logout').style.display = loggedIn ? '' : 'none';
+  $('auth-user-label').textContent = loggedIn ? authState.username : '未登录';
+}
+
+async function apiFetch(url, opts = {}) {
+  if (authState.token) {
+    opts.headers = opts.headers || {};
+    if (!(opts.body instanceof FormData)) {
+      // Don't set Content-Type for FormData (browser sets boundary)
+    }
+    opts.headers['Authorization'] = 'Bearer ' + authState.token;
+  }
+  const res = await fetch(url, opts);
+  if (res.status === 401) {
+    clearAuthState();
+  }
+  return res;
+}
+
+async function doLogin() {
+  const username = $('login-username').value.trim();
+  const password = $('login-password').value;
+  if (!username || !password) {
+    showMsg('login-msg', '请输入用户名和密码', 'err');
+    return;
+  }
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showMsg('login-msg', data.error || '登录失败', 'err');
+      return;
+    }
+    authState.token = data.token;
+    authState.username = data.username;
+    persistAuthState();
+    setLoggedInUI(true);
+    loadAllData();
+  } catch(e) {
+    showMsg('login-msg', '网络错误', 'err');
+  }
+}
+
+async function restoreSession() {
+  loadAuthState();
+  if (!authState.token) {
+    setLoggedInUI(false);
+    return;
+  }
+  try {
+    const res = await apiFetch('/api/auth/me');
+    if (res.ok) {
+      setLoggedInUI(true);
+      loadAllData();
+    } else {
+      clearAuthState();
+    }
+  } catch(e) {
+    clearAuthState();
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   View Navigation
+   ════════════════════════════════════════════════════════════════════════ */
+function showView(name) {
+  currentView = name;
+  $('view-list').classList.toggle('active', name === 'list');
+  $('view-form').classList.toggle('active', name === 'form');
+  $('view-detail').classList.toggle('active', name === 'detail');
+  window.scrollTo(0, 0);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   KaTeX + Markdown Rendering
+   ════════════════════════════════════════════════════════════════════════ */
+const _mathRe = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$(?!\s)(?:[^\$\n]|\\.)+?\$|\\\([\s\S]*?\\\))/g;
+
+function renderMarkdownKatex(src, container) {
+  if (!src || !src.trim()) {
+    container.innerHTML = '<span class="empty-hint">暂无内容</span>';
+    return;
+  }
+  const tokens = [];
+  const placeholder = src.replace(_mathRe, (m) => {
+    tokens.push(m);
+    return '@@MATH' + (tokens.length - 1) + '@@';
+  });
+
+  let html = marked.parse(placeholder);
+
+  html = html.replace(/@@MATH(\d+)@@/g, (_, i) => {
+    const raw = tokens[+i];
+    let tex, display;
+    if (raw.startsWith('$$')) {
+      tex = raw.slice(2, -2);
+      display = true;
+    } else if (raw.startsWith('\\[')) {
+      tex = raw.slice(2, -2);
+      display = true;
+    } else if (raw.startsWith('\\(')) {
+      tex = raw.slice(2, -2);
+      display = false;
+    } else {
+      tex = raw.slice(1, -1);
+      display = false;
+    }
+    try {
+      return katex.renderToString(tex, { displayMode: display, throwOnError: false });
+    } catch(e) {
+      return '<span style="color:#e53e3e;">' + escapeHtml(raw) + '</span>';
+    }
+  });
+
+  container.innerHTML = html;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Floating KaTeX Preview
+   ════════════════════════════════════════════════════════════════════════ */
+const fp = $('float-preview');
+const fpBody = $('fp-body');
+let fpTimeout = null;
+
+function placeFP(el) {
+  const r = el.getBoundingClientRect();
+  let top = r.bottom + 8;
+  let left = r.left;
+  if (top + 280 > window.innerHeight) top = r.top - 280;
+  if (left + 420 > window.innerWidth) left = window.innerWidth - 430;
+  if (left < 8) left = 8;
+  fp.style.top = top + 'px';
+  fp.style.left = left + 'px';
+}
+
+function showFP(el) {
+  clearTimeout(fpTimeout);
+  const text = el.value || '';
+  if (!text.trim()) { fp.style.display = 'none'; return; }
+  fpBody.textContent = text;
+  renderMathInElement(fpBody, KATEX_OPTS);
+  placeFP(el);
+  fp.style.display = '';
+}
+
+function hideFP() {
+  fpTimeout = setTimeout(() => { fp.style.display = 'none'; }, 220);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Data Loading
+   ════════════════════════════════════════════════════════════════════════ */
+async function loadAllData() {
+  await Promise.all([loadTopics(), loadTags(), loadNotes()]);
+}
+
+async function loadTopics() {
+  try {
+    const res = await apiFetch('/api/topics');
+    if (!res.ok) return;
+    allTopics = await res.json();
+    fillTopicSelectors();
+  } catch(e) {}
+}
+
+async function loadTags() {
+  try {
+    const res = await apiFetch('/api/tags');
+    if (!res.ok) return;
+    allTags = await res.json();
+    fillTagFilter();
+  } catch(e) {}
+}
+
+async function loadNotes() {
+  try {
+    const topic = $('filter-topic').value;
+    const tag = $('filter-tag').value;
+    const sort = $('filter-sort').value;
+    const params = new URLSearchParams();
+    if (topic) params.set('topic', topic);
+    if (tag) params.set('tag', tag);
+    if (sort) params.set('sort', sort);
+
+    const res = await apiFetch('/api/notes?' + params);
+    if (!res.ok) return;
+    allNotes = await res.json();
+    renderNoteList();
+  } catch(e) {}
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Selectors
+   ════════════════════════════════════════════════════════════════════════ */
+function fillTopicSelectors() {
+  // Filter
+  const fSel = $('filter-topic');
+  const fVal = fSel.value;
+  fSel.innerHTML = '<option value="">所有主题</option>';
+  allTopics.forEach(t => {
+    fSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</option>';
+  });
+  fSel.value = fVal;
+
+  // Form
+  const nSel = $('note-topic');
+  const nVal = nSel.value;
+  nSel.innerHTML = '<option value="">选择主题...</option>';
+  allTopics.forEach(t => {
+    nSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</option>';
+  });
+  nSel.innerHTML += '<option value="__new__">+ 新建主题</option>';
+  nSel.value = nVal;
+}
+
+function fillTagFilter() {
+  const sel = $('filter-tag');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">所有标签</option>';
+  allTags.forEach(t => {
+    sel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</option>';
+  });
+  sel.value = val;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Note List Rendering
+   ════════════════════════════════════════════════════════════════════════ */
+function renderStars(priority) {
+  if (!priority) return '';
+  let h = '<span class="stars-display">';
+  for (let i = 1; i <= 5; i++) {
+    h += i <= priority ? '★' : '<span class="empty-star">☆</span>';
+  }
+  h += '</span>';
+  return h;
+}
+
+function renderNoteList() {
+  const container = $('note-list');
+  if (allNotes.length === 0) {
+    container.innerHTML = '<div class="empty-hint">暂无笔记，点击"添加笔记"开始记录</div>';
+    return;
+  }
+
+  container.innerHTML = allNotes.map(note => {
+    const tagsHtml = (note.tags || []).map(t =>
+      '<span class="badge-tag">' + escapeHtml(t) + '</span>'
+    ).join('');
+
+    return '<div class="note-card" data-id="' + note.id + '">' +
+      '<div class="note-card-title" data-katex>' + escapeHtml(note.title) + '</div>' +
+      '<div class="note-card-meta">' +
+        '<span class="badge-topic">' + escapeHtml(note.topic) + '</span>' +
+        tagsHtml +
+        renderStars(note.priority) +
+        '<span>创建: ' + formatTime(note.created_at) + '</span>' +
+        '<span>修改: ' + formatTime(note.updated_at) + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  // Render KaTeX in titles
+  container.querySelectorAll('[data-katex]').forEach(el => {
+    renderMathInElement(el, KATEX_OPTS);
+  });
+
+  // Click handlers
+  container.querySelectorAll('.note-card').forEach(card => {
+    card.addEventListener('click', () => openNoteDetail(card.dataset.id));
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Tag Multi-Select Component
+   ════════════════════════════════════════════════════════════════════════ */
+function renderTagChips() {
+  const container = $('tag-selector-input');
+  // Remove existing chips
+  container.querySelectorAll('.tag-chip').forEach(c => c.remove());
+  const input = $('tag-input');
+  // Insert chips before input
+  selectedTags.forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = escapeHtml(name) + ' <span class="tag-chip-remove" data-tag="' + escapeHtml(name) + '">×</span>';
+    container.insertBefore(chip, input);
+  });
+}
+
+function updateTagDropdown() {
+  const dd = $('tag-dropdown');
+  const query = $('tag-input').value.trim().toLowerCase();
+  const available = allTags.filter(t => !selectedTags.includes(t.name));
+  const filtered = query
+    ? available.filter(t => t.name.toLowerCase().includes(query))
+    : available;
+
+  let html = '';
+  filtered.forEach(t => {
+    html += '<div class="tag-option" data-tag-name="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</div>';
+  });
+
+  // Show "add new" option if query doesn't match existing
+  if (query && !allTags.some(t => t.name.toLowerCase() === query) && !selectedTags.includes(query)) {
+    html += '<div class="tag-option add-new" data-new-tag="' + escapeHtml(query) + '">+ 添加 "' + escapeHtml(query) + '"</div>';
+  }
+
+  dd.innerHTML = html;
+  dd.classList.toggle('open', html.length > 0);
+}
+
+function selectTag(name) {
+  if (!selectedTags.includes(name)) {
+    selectedTags.push(name);
+  }
+  $('tag-input').value = '';
+  renderTagChips();
+  $('tag-dropdown').classList.remove('open');
+}
+
+function removeTag(name) {
+  selectedTags = selectedTags.filter(t => t !== name);
+  renderTagChips();
+}
+
+async function addAndSelectTag(name) {
+  try {
+    await apiFetch('/api/tags', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    });
+    await loadTags();
+  } catch(e) {}
+  selectTag(name);
+}
+
+// Event delegation for tag selector
+$('tag-selector-input').addEventListener('click', (e) => {
+  if (e.target.classList.contains('tag-chip-remove')) {
+    removeTag(e.target.dataset.tag);
+    return;
+  }
+  $('tag-input').focus();
+});
+
+$('tag-input').addEventListener('focus', () => {
+  $('tag-selector-input').classList.add('focused');
+  updateTagDropdown();
+});
+
+$('tag-input').addEventListener('blur', () => {
+  $('tag-selector-input').classList.remove('focused');
+  // Delay to allow click on dropdown
+  setTimeout(() => { $('tag-dropdown').classList.remove('open'); }, 200);
+});
+
+$('tag-input').addEventListener('input', updateTagDropdown);
+
+$('tag-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const query = $('tag-input').value.trim();
+    if (!query) return;
+    // If matches existing tag, select it
+    const match = allTags.find(t => t.name.toLowerCase() === query.toLowerCase());
+    if (match && !selectedTags.includes(match.name)) {
+      selectTag(match.name);
+    } else if (!match) {
+      addAndSelectTag(query);
+    }
+  }
+  if (e.key === 'Backspace' && !$('tag-input').value && selectedTags.length > 0) {
+    removeTag(selectedTags[selectedTags.length - 1]);
+  }
+});
+
+$('tag-dropdown').addEventListener('mousedown', (e) => {
+  e.preventDefault(); // Prevent blur
+  const opt = e.target.closest('.tag-option');
+  if (!opt) return;
+  if (opt.dataset.tagName) {
+    selectTag(opt.dataset.tagName);
+  } else if (opt.dataset.newTag) {
+    addAndSelectTag(opt.dataset.newTag);
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════════════
+   Star Rating
+   ════════════════════════════════════════════════════════════════════════ */
+function updateStarDisplay() {
+  document.querySelectorAll('#priority-stars .star-btn').forEach(btn => {
+    btn.classList.toggle('filled', parseInt(btn.dataset.val) <= currentPriority);
+  });
+}
+
+$('priority-stars').addEventListener('click', (e) => {
+  const btn = e.target.closest('.star-btn');
+  if (!btn) return;
+  const val = parseInt(btn.dataset.val);
+  currentPriority = (currentPriority === val) ? 0 : val;
+  updateStarDisplay();
+});
+
+/* ════════════════════════════════════════════════════════════════════════
+   Note Form
+   ════════════════════════════════════════════════════════════════════════ */
+function openCreateForm() {
+  editingNoteId = null;
+  $('form-title-label').textContent = '添加笔记';
+  $('note-title').value = '';
+  $('note-topic').value = '';
+  $('new-topic-input').value = '';
+  $('new-topic-input').style.display = 'none';
+  $('note-editor-md').value = '';
+  $('note-preview').innerHTML = '<span class="empty-hint">暂无内容</span>';
+  selectedTags = [];
+  currentPriority = 0;
+  updateStarDisplay();
+  renderTagChips();
+  showView('form');
+}
+
+async function openEditForm(noteId) {
+  try {
+    const res = await apiFetch('/api/notes/' + noteId);
+    if (!res.ok) return;
+    const note = await res.json();
+
+    editingNoteId = noteId;
+    $('form-title-label').textContent = '编辑笔记';
+    $('note-title').value = note.title;
+
+    // Set topic
+    const topicSel = $('note-topic');
+    // Ensure option exists
+    let found = false;
+    for (const opt of topicSel.options) {
+      if (opt.value === note.topic) { found = true; break; }
+    }
+    if (!found && note.topic) {
+      // Insert before __new__
+      const newOpt = document.createElement('option');
+      newOpt.value = note.topic;
+      newOpt.textContent = note.topic;
+      const lastOpt = topicSel.querySelector('option[value="__new__"]');
+      topicSel.insertBefore(newOpt, lastOpt);
+    }
+    topicSel.value = note.topic;
+    $('new-topic-input').style.display = 'none';
+
+    $('note-editor-md').value = note.content || '';
+    selectedTags = note.tags || [];
+    currentPriority = note.priority || 0;
+    updateStarDisplay();
+    renderTagChips();
+    renderMarkdownKatex(note.content || '', $('note-preview'));
+    showView('form');
+  } catch(e) {}
+}
+
+async function saveNote() {
+  const title = $('note-title').value.trim();
+  let topic = $('note-topic').value;
+
+  if (topic === '__new__') {
+    topic = $('new-topic-input').value.trim();
+    if (!topic) {
+      showMsg('form-msg', '请输入新主题名称', 'err');
+      return;
+    }
+  }
+
+  if (!title) { showMsg('form-msg', '请输入笔记标题', 'err'); return; }
+  if (!topic) { showMsg('form-msg', '请选择或创建主题', 'err'); return; }
+
+  const body = {
+    title,
+    topic,
+    content: $('note-editor-md').value,
+    priority: currentPriority,
+    tags: selectedTags,
+  };
+
+  const url = editingNoteId ? '/api/notes/' + editingNoteId : '/api/notes';
+  const method = editingNoteId ? 'PUT' : 'POST';
+
+  try {
+    const res = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      showMsg('form-msg', data.error || '保存失败', 'err');
+      return;
+    }
+
+    showMsg('form-msg', '保存成功！', 'ok');
+    await loadAllData();
+
+    if (editingNoteId) {
+      setTimeout(() => openNoteDetail(editingNoteId), 400);
+    } else {
+      setTimeout(() => showView('list'), 400);
+    }
+  } catch(e) {
+    showMsg('form-msg', '网络错误', 'err');
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Note Detail
+   ════════════════════════════════════════════════════════════════════════ */
+async function openNoteDetail(noteId) {
+  try {
+    const res = await apiFetch('/api/notes/' + noteId);
+    if (!res.ok) return;
+    const note = await res.json();
+    viewingNoteId = noteId;
+
+    // Title with KaTeX
+    const titleEl = $('detail-title');
+    titleEl.textContent = note.title;
+    renderMathInElement(titleEl, KATEX_OPTS);
+
+    // Meta
+    const tagsHtml = (note.tags || []).map(t =>
+      '<span class="badge-tag">' + escapeHtml(t) + '</span>'
+    ).join('');
+
+    $('detail-meta').innerHTML =
+      '<span class="badge-topic">' + escapeHtml(note.topic) + '</span>' +
+      tagsHtml +
+      renderStars(note.priority) +
+      '<span>创建: ' + formatTime(note.created_at) + '</span>' +
+      '<span>修改: ' + formatTime(note.updated_at) + '</span>';
+
+    // Body
+    renderMarkdownKatex(note.content || '', $('detail-body'));
+
+    // Clear input areas
+    $('comment-input-area').innerHTML = '';
+    $('question-input-area').innerHTML = '';
+
+    // Load comments & questions
+    loadComments(noteId);
+    loadQuestions(noteId);
+
+    showView('detail');
+  } catch(e) {}
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Image Upload
+   ════════════════════════════════════════════════════════════════════════ */
+async function uploadAndInsertImage(file) {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  try {
+    const res = await apiFetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      alert(data.error || '图片上传失败');
+      return;
+    }
+
+    const data = await res.json();
+    const md = '![image](' + data.url + ')';
+
+    const ta = $('note-editor-md');
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    ta.value = ta.value.substring(0, start) + md + ta.value.substring(end);
+    ta.selectionStart = ta.selectionEnd = start + md.length;
+    ta.focus();
+
+    renderMarkdownKatex(ta.value, $('note-preview'));
+  } catch(e) {
+    alert('图片上传失败');
+  }
+}
+
+$('btn-upload-img').addEventListener('click', () => {
+  $('img-file-input').click();
+});
+
+$('img-file-input').addEventListener('change', async function() {
+  if (!this.files.length) return;
+  await uploadAndInsertImage(this.files[0]);
+  this.value = '';
+});
+
+$('note-editor-md').addEventListener('paste', async (e) => {
+  const items = e.clipboardData?.items;
+  if (!items) return;
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault();
+      const blob = item.getAsFile();
+      await uploadAndInsertImage(blob);
+      return;
+    }
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════════════
+   Live Preview & Float Preview
+   ════════════════════════════════════════════════════════════════════════ */
+$('note-editor-md').addEventListener('input', function() {
+  renderMarkdownKatex(this.value, $('note-preview'));
+});
+
+// Float preview for title input
+const titleInput = $('note-title');
+titleInput.addEventListener('focus', () => showFP(titleInput));
+titleInput.addEventListener('input', () => showFP(titleInput));
+titleInput.addEventListener('blur', hideFP);
+
+/* ════════════════════════════════════════════════════════════════════════
+   Comments & Questions
+   ════════════════════════════════════════════════════════════════════════ */
+
+// --- Shared: create an input box with live KaTeX preview ---
+function createCQInputBox(opts) {
+  // opts: { container, placeholder, submitLabel, onSubmit, onCancel, isReply }
+  const box = document.createElement('div');
+  box.className = 'cq-input-box' + (opts.isReply ? ' is-reply' : '');
+
+  const ta = document.createElement('textarea');
+  ta.placeholder = opts.placeholder || '输入内容，支持 $LaTeX$ 公式...';
+  box.appendChild(ta);
+
+  const preview = document.createElement('div');
+  preview.className = 'cq-input-preview';
+  preview.innerHTML = '<span class="empty-hint">实时预览</span>';
+  box.appendChild(preview);
+
+  const actions = document.createElement('div');
+  actions.className = 'cq-input-actions';
+
+  const btnSubmit = document.createElement('button');
+  btnSubmit.className = 'btn-submit';
+  btnSubmit.textContent = opts.submitLabel || '提交';
+  actions.appendChild(btnSubmit);
+
+  const btnCancel = document.createElement('button');
+  btnCancel.className = 'btn-cancel';
+  btnCancel.textContent = '取消';
+  actions.appendChild(btnCancel);
+
+  box.appendChild(actions);
+  opts.container.appendChild(box);
+
+  // Live preview
+  ta.addEventListener('input', () => {
+    const text = ta.value.trim();
+    if (!text) {
+      preview.innerHTML = '<span class="empty-hint">实时预览</span>';
+    } else {
+      preview.textContent = text;
+      renderMathInElement(preview, KATEX_OPTS);
+    }
+  });
+
+  // Float preview on focus
+  ta.addEventListener('focus', () => showFP(ta));
+  ta.addEventListener('input', () => showFP(ta));
+  ta.addEventListener('blur', hideFP);
+
+  btnSubmit.addEventListener('click', async () => {
+    const text = ta.value.trim();
+    if (!text) return;
+    btnSubmit.disabled = true;
+    btnSubmit.textContent = '提交中...';
+    await opts.onSubmit(text);
+    box.remove();
+  });
+
+  btnCancel.addEventListener('click', () => {
+    box.remove();
+    if (opts.onCancel) opts.onCancel();
+  });
+
+  ta.focus();
+  return box;
+}
+
+// --- Comments ---
+async function loadComments(noteId) {
+  try {
+    const res = await apiFetch('/api/notes/' + noteId + '/comments');
+    if (!res.ok) return;
+    const comments = await res.json();
+    renderComments(comments, noteId);
+  } catch(e) {}
+}
+
+function renderComments(comments, noteId) {
+  const container = $('comment-list');
+  // Separate top-level and replies
+  const topLevel = comments.filter(c => !c.parent_id);
+  const replies = comments.filter(c => c.parent_id);
+  const replyMap = {};
+  replies.forEach(r => {
+    if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
+    replyMap[r.parent_id].push(r);
+  });
+
+  let html = '';
+  topLevel.forEach(c => {
+    html += renderCommentItem(c, false);
+    (replyMap[c.id] || []).forEach(r => {
+      html += renderCommentItem(r, true);
+    });
+  });
+
+  container.innerHTML = html || '';
+
+  // KaTeX in comment bodies
+  container.querySelectorAll('.cq-item-body').forEach(el => {
+    renderMathInElement(el, KATEX_OPTS);
+  });
+
+  // Reply buttons
+  container.querySelectorAll('.btn-reply-comment').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parentId = btn.dataset.id;
+      // Remove any existing reply boxes
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '回复评论，支持 $LaTeX$ 公式...',
+        submitLabel: '提交回复',
+        isReply: true,
+        onSubmit: async (text) => {
+          await apiFetch('/api/notes/' + noteId + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text, parent_id: parentId }),
+          });
+          wrapper.remove();
+          loadComments(noteId);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-comment').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const isReply = btn.dataset.reply === '1';
+      const msg = isReply
+        ? '确定要删除这条评论回复吗？'
+        : '确定要删除这条评论吗？其回复也会一并删除。';
+      if (!confirm(msg)) return;
+      try {
+        const res = await apiFetch('/api/comments/' + btn.dataset.id, { method: 'DELETE' });
+        if (!res.ok) {
+          let msg = '删除评论失败';
+          try {
+            const data = await res.json();
+            if (data && data.error) msg = data.error;
+          } catch (e) {}
+          alert(msg);
+          return;
+        }
+        loadComments(noteId);
+      } catch (e) {
+        alert('删除评论失败');
+      }
+    });
+  });
+}
+
+function renderCommentItem(c, isReply) {
+  return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
+    '<div class="cq-item-header">' +
+      '<span class="cq-icon">💬</span>' +
+      '<span>' + formatTime(c.created_at) + '</span>' +
+    '</div>' +
+    '<div class="cq-item-body">' + escapeHtml(c.content) + '</div>' +
+    '<div class="cq-item-actions">' +
+      (isReply ? '' : '<button class="btn-reply-comment" data-id="' + c.id + '">回复</button>') +
+      '<button class="btn-delete-comment btn-delete-cq" data-id="' + c.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// --- Questions ---
+async function loadQuestions(noteId) {
+  try {
+    const res = await apiFetch('/api/notes/' + noteId + '/questions');
+    if (!res.ok) return;
+    const questions = await res.json();
+    renderQuestions(questions, noteId);
+  } catch(e) {}
+}
+
+function renderQuestions(questions, noteId) {
+  const container = $('question-list');
+  const topLevel = questions.filter(q => !q.parent_id);
+  const replies = questions.filter(q => q.parent_id);
+  const replyMap = {};
+  replies.forEach(r => {
+    if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
+    replyMap[r.parent_id].push(r);
+  });
+
+  let html = '';
+  topLevel.forEach(q => {
+    html += renderQuestionItem(q, false);
+    (replyMap[q.id] || []).forEach(r => {
+      html += renderQuestionItem(r, true);
+    });
+  });
+
+  container.innerHTML = html || '';
+
+  // KaTeX
+  container.querySelectorAll('.cq-item-body').forEach(el => {
+    renderMathInElement(el, KATEX_OPTS);
+  });
+
+  // Toggle resolved
+  container.querySelectorAll('.btn-toggle-resolved').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await apiFetch('/api/questions/' + btn.dataset.id + '/toggle-resolved', { method: 'POST' });
+      loadQuestions(noteId);
+    });
+  });
+
+  // Reply buttons
+  container.querySelectorAll('.btn-reply-question').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parentId = btn.dataset.id;
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '回复问题，支持 $LaTeX$ 公式...',
+        submitLabel: '提交回复',
+        isReply: true,
+        onSubmit: async (text) => {
+          await apiFetch('/api/notes/' + noteId + '/questions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text, parent_id: parentId }),
+          });
+          wrapper.remove();
+          loadQuestions(noteId);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-question').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const isReply = btn.dataset.reply === '1';
+      const msg = isReply
+        ? '确定要删除这条问题回复吗？'
+        : '确定要删除这个问题吗？其回复也会一并删除。';
+      if (!confirm(msg)) return;
+      try {
+        const res = await apiFetch('/api/questions/' + btn.dataset.id, { method: 'DELETE' });
+        if (!res.ok) {
+          let msg = '删除问题失败';
+          try {
+            const data = await res.json();
+            if (data && data.error) msg = data.error;
+          } catch (e) {}
+          alert(msg);
+          return;
+        }
+        loadQuestions(noteId);
+      } catch (e) {
+        alert('删除问题失败');
+      }
+    });
+  });
+}
+
+function renderQuestionItem(q, isReply) {
+  const iconClass = q.resolved ? 'resolved' : 'question';
+  const icon = q.resolved ? '✅' : '❓';
+  const resolveBtn = (!isReply && !q.resolved)
+    ? '<button class="btn-toggle-resolved btn-resolve" data-id="' + q.id + '">已解决</button>'
+    : (!isReply && q.resolved)
+    ? '<button class="btn-toggle-resolved btn-unresolve" data-id="' + q.id + '">改为未解决</button>'
+    : '';
+
+  return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
+    '<div class="cq-item-header">' +
+      '<span class="cq-icon ' + iconClass + '">' + icon + '</span>' +
+      '<span>' + formatTime(q.created_at) + '</span>' +
+      (q.resolved && !isReply ? '<span style="color:#38a169;font-weight:600;">已解决</span>' : '') +
+    '</div>' +
+    '<div class="cq-item-body">' + escapeHtml(q.content) + '</div>' +
+    '<div class="cq-item-actions">' +
+      (isReply ? '' : resolveBtn + '<button class="btn-reply-question" data-id="' + q.id + '">回复</button>') +
+      '<button class="btn-delete-question btn-delete-cq" data-id="' + q.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
+    '</div>' +
+  '</div>';
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Event Listeners
+   ════════════════════════════════════════════════════════════════════════ */
+$('btn-login').addEventListener('click', doLogin);
+$('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+$('login-username').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+$('btn-logout').addEventListener('click', clearAuthState);
+
+$('btn-add-note').addEventListener('click', openCreateForm);
+$('btn-back-to-list').addEventListener('click', () => showView('list'));
+$('btn-back-from-detail').addEventListener('click', () => showView('list'));
+
+$('btn-edit-note').addEventListener('click', () => {
+  if (viewingNoteId) openEditForm(viewingNoteId);
+});
+
+$('btn-delete-note').addEventListener('click', async () => {
+  if (!viewingNoteId) return;
+  if (!confirm('确定要删除这篇笔记吗？此操作不可撤销。')) return;
+  try {
+    const res = await apiFetch('/api/notes/' + viewingNoteId, { method: 'DELETE' });
+    if (!res.ok) { alert('删除失败'); return; }
+    await loadAllData();
+    showView('list');
+  } catch(e) {
+    alert('删除失败');
+  }
+});
+
+$('btn-save-note').addEventListener('click', saveNote);
+
+$('btn-add-comment').addEventListener('click', () => {
+  const area = $('comment-input-area');
+  if (area.querySelector('.cq-input-box')) return; // already open
+  createCQInputBox({
+    container: area,
+    placeholder: '输入评论，支持 $LaTeX$ 公式...',
+    submitLabel: '提交评论',
+    onSubmit: async (text) => {
+      await apiFetch('/api/notes/' + viewingNoteId + '/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadComments(viewingNoteId);
+    },
+  });
+});
+
+$('btn-add-question').addEventListener('click', () => {
+  const area = $('question-input-area');
+  if (area.querySelector('.cq-input-box')) return;
+  createCQInputBox({
+    container: area,
+    placeholder: '输入问题，支持 $LaTeX$ 公式...',
+    submitLabel: '提交问题',
+    onSubmit: async (text) => {
+      await apiFetch('/api/notes/' + viewingNoteId + '/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadQuestions(viewingNoteId);
+    },
+  });
+});
+
+$('note-topic').addEventListener('change', function() {
+  $('new-topic-input').style.display = this.value === '__new__' ? '' : 'none';
+});
+
+$('filter-topic').addEventListener('change', loadNotes);
+$('filter-tag').addEventListener('change', loadNotes);
+$('filter-sort').addEventListener('change', loadNotes);
+
+/* ════════════════════════════════════════════════════════════════════════
+   Marked Configuration
+   ════════════════════════════════════════════════════════════════════════ */
+marked.setOptions({ breaks: true, gfm: true });
+
+/* ════════════════════════════════════════════════════════════════════════
+   Init
+   ════════════════════════════════════════════════════════════════════════ */
+restoreSession();
+</script>
+</body>
+</html>
