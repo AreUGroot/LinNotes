@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lin的笔记</title>
 <link rel="stylesheet" href="vendor/katex/katex.min.css">
+<link rel="stylesheet" href="vendor/vditor/dist/index.css">
 <style>
 /* ── Reset ──────────────────────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -190,6 +191,15 @@ button {
   font-size: 0.88rem;
 }
 .render-box th { background: #f7fafc; font-weight: 600; }
+.md-scroll-anchor {
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
 
 .section-label {
   font-size: 0.75rem;
@@ -516,26 +526,77 @@ button {
   margin-left: auto;
 }
 
-.editor-split {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
+.vditor-shell { display: none; }
+.vditor-shell.active { display: block; }
+.vditor-shell .vditor {
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+  overflow: hidden;
 }
-@media (max-width: 800px) { .editor-split { grid-template-columns: 1fr; } }
+.vditor-shell .vditor-reset {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+.editor-split.vditor-fallback-hidden { display: none; }
 
-.editor-col { display: flex; flex-direction: column; }
+.editor-split {
+  --editor-left-width: calc(50% - 5px);
+  display: grid;
+  grid-template-columns:
+    minmax(0, var(--editor-left-width))
+    10px
+    minmax(0, calc(100% - var(--editor-left-width) - 10px));
+  gap: 0;
+  align-items: stretch;
+}
+@media (max-width: 800px) {
+  .editor-split { grid-template-columns: 1fr; gap: 16px; }
+  .editor-resizer { display: none; }
+}
+
+.editor-col { display: flex; flex-direction: column; min-width: 0; }
 .editor-col .section-label { margin-bottom: 6px; }
+
+.editor-resizer {
+  position: relative;
+  cursor: col-resize;
+  user-select: none;
+  touch-action: none;
+}
+.editor-resizer::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--bdr);
+  border-radius: 999px;
+  transition: background-color 0.18s;
+}
+.editor-resizer:hover::before,
+.editor-resizer.active::before {
+  background: var(--pri);
+}
 
 #note-editor-md {
   width: 100%;
   min-height: 400px;
+  height: 400px;
   flex: 1;
-  resize: vertical;
+  resize: none;
+  overflow-y: auto;
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  font-size: 0.95rem;
+  line-height: 1.9;
+  background: var(--white);
 }
 
 #note-preview {
   min-height: 400px;
+  height: 400px;
   flex: 1;
+  overflow-y: auto;
 }
 
 .form-actions {
@@ -865,11 +926,15 @@ button {
       <input type="file" id="img-file-input" accept="image/*" style="display:none;">
       <span class="hint">支持 Ctrl+V / Cmd+V 粘贴图片</span>
     </div>
-    <div class="editor-split">
+    <div id="note-editor-vditor-shell" class="vditor-shell">
+      <div id="note-editor-vditor"></div>
+    </div>
+    <div class="editor-split" id="editor-split">
       <div class="editor-col">
         <div class="section-label">Markdown 编辑</div>
         <textarea id="note-editor-md" placeholder="在此输入笔记内容...&#10;&#10;支持 Markdown 和 LaTeX 公式：&#10;- 行内公式：$E = mc^2$&#10;- 块级公式：$$\int_0^\infty e^{-x} dx = 1$$"></textarea>
       </div>
+      <div class="editor-resizer" id="editor-resizer" role="separator" aria-orientation="vertical" aria-label="调整编辑区和预览区宽度" tabindex="0"></div>
       <div class="editor-col">
         <div class="section-label">实时预览</div>
         <div id="note-preview" class="render-box"></div>
@@ -880,6 +945,7 @@ button {
   <!-- Save -->
   <div class="form-actions">
     <button class="btn-primary" id="btn-save-note">保存笔记</button>
+    <button class="btn-ghost" id="btn-save-note-and-open" type="button">保存并跳转</button>
     <span id="form-msg"></span>
   </div>
 </div>
@@ -935,6 +1001,7 @@ button {
 <script src="vendor/marked/marked.min.js"></script>
 <script src="vendor/katex/katex.min.js"></script>
 <script src="vendor/katex/contrib/auto-render.min.js"></script>
+<script src="vendor/vditor/dist/index.min.js"></script>
 <script>
 'use strict';
 
@@ -963,6 +1030,9 @@ let editingNoteId = null;
 let viewingNoteId = null;
 let selectedTags = [];
 let currentPriority = 0;
+let noteVditor = null;
+let noteVditorInitStarted = false;
+let noteVditorPendingValue = '';
 const TOPIC_NEW_MARKER = '__new__';
 let topicFormState = {
   segments: [],
@@ -976,6 +1046,108 @@ function escapeHtml(s) {
   const d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
+}
+
+function toggleNoteEditorMode(useVditor) {
+  const shell = $('note-editor-vditor-shell');
+  const fallback = $('editor-split');
+  if (shell) shell.classList.toggle('active', !!useVditor);
+  if (fallback) fallback.classList.toggle('vditor-fallback-hidden', !!useVditor);
+}
+
+function syncHiddenNoteEditorValueFromVditor() {
+  if (!noteVditor || typeof noteVditor.getValue !== 'function') return;
+  try {
+    $('note-editor-md').value = noteVditor.getValue();
+  } catch (e) {}
+}
+
+function getNoteEditorValue() {
+  if (noteVditor && typeof noteVditor.getValue === 'function') {
+    try { return noteVditor.getValue(); } catch (e) {}
+  }
+  return $('note-editor-md').value;
+}
+
+function setNoteEditorValue(value) {
+  const text = String(value || '');
+  const ta = $('note-editor-md');
+  ta.value = text;
+  noteVditorPendingValue = text;
+
+  if (noteVditor && typeof noteVditor.setValue === 'function') {
+    try {
+      noteVditor.setValue(text);
+      syncHiddenNoteEditorValueFromVditor();
+      return;
+    } catch (e) {}
+  }
+
+  renderMarkdownKatex(text, $('note-preview'), { withScrollAnchors: true });
+}
+
+function focusNoteEditor() {
+  if (noteVditor && typeof noteVditor.focus === 'function') {
+    try { noteVditor.focus(); return; } catch (e) {}
+  }
+  $('note-editor-md').focus();
+}
+
+function insertMarkdownToNoteEditor(md) {
+  if (noteVditor && typeof noteVditor.insertValue === 'function') {
+    try {
+      noteVditor.insertValue(md);
+      syncHiddenNoteEditorValueFromVditor();
+      return true;
+    } catch (e) {}
+  }
+  return false;
+}
+
+function ensureNoteVditor() {
+  if (noteVditor) {
+    toggleNoteEditorMode(true);
+    if (typeof noteVditor.resize === 'function') {
+      setTimeout(() => { try { noteVditor.resize(); } catch (e) {} }, 0);
+    }
+    return;
+  }
+  if (noteVditorInitStarted) return;
+  if (typeof window.Vditor !== 'function') {
+    toggleNoteEditorMode(false);
+    return;
+  }
+
+  noteVditorInitStarted = true;
+  try {
+    noteVditor = new Vditor('note-editor-vditor', {
+      mode: 'wysiwyg',
+      height: 400,
+      cdn: '/vendor/vditor',
+      cache: { enable: false },
+      preview: {
+        math: { engine: 'KaTeX' },
+      },
+      input(value) {
+        $('note-editor-md').value = value;
+      },
+      after() {
+        toggleNoteEditorMode(true);
+        try {
+          noteVditor.setValue(noteVditorPendingValue || $('note-editor-md').value || '');
+          syncHiddenNoteEditorValueFromVditor();
+          if (currentView === 'form' && typeof noteVditor.resize === 'function') {
+            noteVditor.resize();
+          }
+        } catch (e) {}
+      },
+    });
+  } catch (e) {
+    noteVditor = null;
+    noteVditorInitStarted = false;
+    toggleNoteEditorMode(false);
+    console.error('Vditor 初始化失败:', e);
+  }
 }
 
 function formatTime(iso) {
@@ -1283,6 +1455,7 @@ function showView(name) {
   $('view-list').classList.toggle('active', name === 'list');
   $('view-form').classList.toggle('active', name === 'form');
   $('view-detail').classList.toggle('active', name === 'detail');
+  if (name === 'form') ensureNoteVditor();
   window.scrollTo(0, 0);
 }
 
@@ -1290,8 +1463,112 @@ function showView(name) {
    KaTeX + Markdown Rendering
    ════════════════════════════════════════════════════════════════════════ */
 const _mathRe = /(\$\$[\s\S]*?\$\$|\\\[[\s\S]*?\\\]|\$(?!\s)(?:[^\$\n]|\\.)+?\$|\\\([\s\S]*?\\\))/g;
+const SCROLL_ANCHOR_CLASS = 'md-scroll-anchor';
 
-function renderMarkdownKatex(src, container) {
+function countNewlines(s) {
+  return (String(s || '').match(/\n/g) || []).length;
+}
+
+function annotateMarkedTokenLines(tokens, startLine = 1) {
+  let line = startLine;
+  if (!Array.isArray(tokens)) return line;
+
+  for (const token of tokens) {
+    token._lineStart = line;
+
+    if (token.type === 'blockquote' && Array.isArray(token.tokens)) {
+      annotateMarkedTokenLines(token.tokens, token._lineStart);
+    } else if (token.type === 'list' && Array.isArray(token.items)) {
+      let itemLine = token._lineStart;
+      for (const item of token.items) {
+        item._lineStart = itemLine;
+        if (Array.isArray(item.tokens)) {
+          annotateMarkedTokenLines(item.tokens, item._lineStart);
+        }
+        itemLine += countNewlines(item.raw);
+      }
+    }
+
+    line += countNewlines(token.raw);
+  }
+
+  return line;
+}
+
+function makeScrollAnchorToken(line) {
+  const safeLine = Math.max(1, Math.floor(Number(line) || 1));
+  const html = '<div class="' + SCROLL_ANCHOR_CLASS + '" data-source-line="' + safeLine + '" aria-hidden="true"></div>';
+  return {
+    type: 'html',
+    raw: html,
+    text: html,
+    block: true,
+    pre: false,
+  };
+}
+
+function isAnchorHtmlToken(token) {
+  if (!token || token.type !== 'html') return false;
+  const text = String(token.text || token.raw || '');
+  return text.includes(SCROLL_ANCHOR_CLASS);
+}
+
+function injectMarkedScrollAnchors(tokens) {
+  if (!Array.isArray(tokens)) return tokens;
+  const out = [];
+
+  for (const token of tokens) {
+    if (token.type === 'space') {
+      const startLine = Math.max(1, Math.floor(Number(token._lineStart) || 1));
+      const endLine = startLine + Math.max(0, countNewlines(token.raw));
+      // Blank lines have no rendered counterpart. Add two zero-height anchors so
+      // scroll mapping stays flat across the blank range instead of drifting.
+      out.push(makeScrollAnchorToken(startLine));
+      if (endLine !== startLine) out.push(makeScrollAnchorToken(endLine));
+      out.push(token);
+      continue;
+    }
+
+    if (!isAnchorHtmlToken(token)) {
+      out.push(makeScrollAnchorToken(token._lineStart));
+    }
+
+    if (token.type === 'blockquote' && Array.isArray(token.tokens)) {
+      token.tokens = injectMarkedScrollAnchors(token.tokens);
+    } else if (token.type === 'list' && Array.isArray(token.items)) {
+      token.items = token.items.map(item => {
+        if (Array.isArray(item.tokens)) {
+          const itemTokens = injectMarkedScrollAnchors(item.tokens);
+          item.tokens = [makeScrollAnchorToken(item._lineStart)].concat(itemTokens);
+        }
+        return item;
+      });
+    }
+
+    out.push(token);
+  }
+
+  return out;
+}
+
+function parseMarkedTokens(tokens) {
+  if (typeof marked.parser === 'function') return marked.parser(tokens);
+  if (marked.Parser && typeof marked.Parser.parse === 'function') return marked.Parser.parse(tokens);
+  return marked.parse(tokens);
+}
+
+function parseMarkdownWithScrollAnchors(src) {
+  try {
+    const tokens = marked.lexer(src);
+    annotateMarkedTokenLines(tokens, 1);
+    const tokensWithAnchors = injectMarkedScrollAnchors(tokens);
+    return parseMarkedTokens(tokensWithAnchors);
+  } catch (e) {
+    return marked.parse(src);
+  }
+}
+
+function renderMarkdownKatex(src, container, opts = {}) {
   if (!src || !src.trim()) {
     container.innerHTML = '<span class="empty-hint">暂无内容</span>';
     return;
@@ -1302,7 +1579,7 @@ function renderMarkdownKatex(src, container) {
     return '@@MATH' + (tokens.length - 1) + '@@';
   });
 
-  let html = marked.parse(placeholder);
+  let html = opts.withScrollAnchors ? parseMarkdownWithScrollAnchors(placeholder) : marked.parse(placeholder);
 
   html = html.replace(/@@MATH(\d+)@@/g, (_, i) => {
     const raw = tokens[+i];
@@ -1328,6 +1605,136 @@ function renderMarkdownKatex(src, container) {
   });
 
   container.innerHTML = html;
+}
+
+let isSyncingEditorPreviewScroll = false;
+let isDraggingEditorResizer = false;
+
+function getElementScrollOffset(container, el) {
+  const cRect = container.getBoundingClientRect();
+  const eRect = el.getBoundingClientRect();
+  return (eRect.top - cRect.top) + container.scrollTop;
+}
+
+function getPreviewScrollAnchors(container) {
+  return Array.from(container.querySelectorAll('.' + SCROLL_ANCHOR_CLASS + '[data-source-line]'))
+    .map(el => ({
+      el,
+      line: Math.max(1, parseFloat(el.dataset.sourceLine) || 1),
+      top: getElementScrollOffset(container, el),
+    }))
+    .sort((a, b) => (a.line - b.line) || (a.top - b.top));
+}
+
+function getTextareaLineHeightPx(ta) {
+  const lh = parseFloat(getComputedStyle(ta).lineHeight);
+  return Number.isFinite(lh) && lh > 0 ? lh : 24;
+}
+
+function mapLineToPreviewScrollTop(line, preview, anchors) {
+  if (!anchors.length) return 0;
+  const maxScroll = Math.max(0, preview.scrollHeight - preview.clientHeight);
+  let prev = null;
+  let next = null;
+
+  for (const anchor of anchors) {
+    if (anchor.line <= line) prev = anchor;
+    if (anchor.line > line) { next = anchor; break; }
+  }
+
+  let target = 0;
+  if (!prev) {
+    target = 0;
+  } else if (!next || next.line <= prev.line) {
+    target = prev.top;
+  } else {
+    const t = (line - prev.line) / (next.line - prev.line);
+    target = prev.top + (next.top - prev.top) * Math.max(0, Math.min(1, t));
+  }
+  return Math.max(0, Math.min(maxScroll, target));
+}
+
+function mapPreviewScrollTopToLine(scrollTop, anchors) {
+  if (!anchors.length) return 1;
+  let prev = null;
+  let next = null;
+
+  for (const anchor of anchors) {
+    if (anchor.top <= scrollTop) prev = anchor;
+    if (anchor.top > scrollTop) { next = anchor; break; }
+  }
+
+  if (!prev) return 1;
+  if (!next || next.top <= prev.top) return prev.line;
+
+  const t = (scrollTop - prev.top) / (next.top - prev.top);
+  return prev.line + (next.line - prev.line) * Math.max(0, Math.min(1, t));
+}
+
+function syncScrollByRatio(sourceEl, targetEl) {
+  if (!sourceEl || !targetEl || isSyncingEditorPreviewScroll) return;
+  const sourceMax = Math.max(0, sourceEl.scrollHeight - sourceEl.clientHeight);
+  const targetMax = Math.max(0, targetEl.scrollHeight - targetEl.clientHeight);
+
+  isSyncingEditorPreviewScroll = true;
+  targetEl.scrollTop = (sourceMax > 0 && targetMax > 0)
+    ? (sourceEl.scrollTop / sourceMax) * targetMax
+    : 0;
+  requestAnimationFrame(() => { isSyncingEditorPreviewScroll = false; });
+}
+
+function syncPreviewScrollFromEditor() {
+  const editor = $('note-editor-md');
+  const preview = $('note-preview');
+  if (isSyncingEditorPreviewScroll) return;
+
+  const anchors = getPreviewScrollAnchors(preview);
+  if (!anchors.length) {
+    syncScrollByRatio(editor, preview);
+    return;
+  }
+
+  const line = 1 + (editor.scrollTop / getTextareaLineHeightPx(editor));
+  isSyncingEditorPreviewScroll = true;
+  preview.scrollTop = mapLineToPreviewScrollTop(line, preview, anchors);
+  requestAnimationFrame(() => { isSyncingEditorPreviewScroll = false; });
+}
+
+function syncEditorScrollFromPreview() {
+  const editor = $('note-editor-md');
+  const preview = $('note-preview');
+  if (isSyncingEditorPreviewScroll) return;
+
+  const anchors = getPreviewScrollAnchors(preview);
+  if (!anchors.length) {
+    syncScrollByRatio(preview, editor);
+    return;
+  }
+
+  const line = mapPreviewScrollTopToLine(preview.scrollTop, anchors);
+  const lineHeight = getTextareaLineHeightPx(editor);
+  const maxScroll = Math.max(0, editor.scrollHeight - editor.clientHeight);
+  const target = Math.max(0, Math.min(maxScroll, (line - 1) * lineHeight));
+
+  isSyncingEditorPreviewScroll = true;
+  editor.scrollTop = target;
+  requestAnimationFrame(() => { isSyncingEditorPreviewScroll = false; });
+}
+
+function resetEditorPreviewScroll() {
+  $('note-editor-md').scrollTop = 0;
+  $('note-preview').scrollTop = 0;
+}
+
+function setEditorSplitLeftWidth(px) {
+  const split = $('editor-split');
+  if (!split) return;
+  const rect = split.getBoundingClientRect();
+  const handleWidth = 10;
+  const minPane = 220;
+  const maxLeft = Math.max(minPane, rect.width - handleWidth - minPane);
+  const left = Math.max(minPane, Math.min(px, maxLeft));
+  split.style.setProperty('--editor-left-width', left + 'px');
 }
 
 function renderTitlePreview(src) {
@@ -1635,8 +2042,8 @@ function openCreateForm() {
   $('note-title').value = '';
   renderTitlePreview('');
   resetTopicFormState();
-  $('note-editor-md').value = '';
-  $('note-preview').innerHTML = '<span class="empty-hint">暂无内容</span>';
+  setNoteEditorValue('');
+  resetEditorPreviewScroll();
   selectedTags = [];
   currentPriority = 0;
   updateStarDisplay();
@@ -1657,17 +2064,18 @@ async function openEditForm(noteId) {
 
     setTopicFormByRawTopic(note.topic || '');
 
-    $('note-editor-md').value = note.content || '';
+    setNoteEditorValue(note.content || '');
     selectedTags = note.tags || [];
     currentPriority = note.priority || 0;
     updateStarDisplay();
     renderTagChips();
-    renderMarkdownKatex(note.content || '', $('note-preview'));
+    resetEditorPreviewScroll();
     showView('form');
   } catch(e) {}
 }
 
-async function saveNote() {
+async function saveNote(options = {}) {
+  const navigateAfterSave = !!options.navigateAfterSave;
   const title = $('note-title').value.trim();
   const topic = getTopicValueFromForm();
 
@@ -1680,7 +2088,7 @@ async function saveNote() {
   const body = {
     title,
     topic,
-    content: $('note-editor-md').value,
+    content: getNoteEditorValue(),
     priority: currentPriority,
     tags: selectedTags,
   };
@@ -1695,19 +2103,31 @@ async function saveNote() {
       body: JSON.stringify(body),
     });
 
+    const data = await res.json();
+
     if (!res.ok) {
-      const data = await res.json();
       showMsg('form-msg', data.error || '保存失败', 'err');
       return;
+    }
+
+    const savedNote = data.note || null;
+    const savedNoteId = (savedNote && savedNote.id) ? savedNote.id : editingNoteId;
+    if (!editingNoteId && savedNoteId) {
+      editingNoteId = savedNoteId;
+      $('form-title-label').textContent = '编辑笔记';
     }
 
     showMsg('form-msg', '保存成功！', 'ok');
     await loadAllData();
 
-    if (editingNoteId) {
-      setTimeout(() => openNoteDetail(editingNoteId), 400);
+    if (!navigateAfterSave) {
+      return;
+    }
+
+    if (savedNoteId) {
+      setTimeout(() => openNoteDetail(savedNoteId), 300);
     } else {
-      setTimeout(() => showView('list'), 400);
+      setTimeout(() => showView('list'), 300);
     }
   } catch(e) {
     showMsg('form-msg', '网络错误', 'err');
@@ -1778,14 +2198,19 @@ async function uploadAndInsertImage(file) {
     const data = await res.json();
     const md = '![image](' + data.url + ')';
 
+    if (insertMarkdownToNoteEditor(md)) {
+      return;
+    }
+
     const ta = $('note-editor-md');
     const start = ta.selectionStart;
     const end = ta.selectionEnd;
     ta.value = ta.value.substring(0, start) + md + ta.value.substring(end);
     ta.selectionStart = ta.selectionEnd = start + md.length;
-    ta.focus();
+    focusNoteEditor();
 
-    renderMarkdownKatex(ta.value, $('note-preview'));
+    renderMarkdownKatex(ta.value, $('note-preview'), { withScrollAnchors: true });
+    syncPreviewScrollFromEditor();
   } catch(e) {
     alert('图片上传失败');
   }
@@ -1818,13 +2243,59 @@ $('note-editor-md').addEventListener('paste', async (e) => {
    Live Preview & Float Preview
    ════════════════════════════════════════════════════════════════════════ */
 $('note-editor-md').addEventListener('input', function() {
-  renderMarkdownKatex(this.value, $('note-preview'));
+  renderMarkdownKatex(this.value, $('note-preview'), { withScrollAnchors: true });
+  syncPreviewScrollFromEditor();
   showFP(this);
+});
+$('note-editor-md').addEventListener('scroll', function() {
+  syncPreviewScrollFromEditor();
+});
+$('note-preview').addEventListener('scroll', function() {
+  syncEditorScrollFromPreview();
 });
 $('note-editor-md').addEventListener('focus', function() {
   showFP(this);
 });
 $('note-editor-md').addEventListener('blur', hideFP);
+
+const editorResizer = $('editor-resizer');
+editorResizer.addEventListener('pointerdown', (e) => {
+  if (window.matchMedia('(max-width: 800px)').matches) return;
+  isDraggingEditorResizer = true;
+  editorResizer.classList.add('active');
+  editorResizer.setPointerCapture?.(e.pointerId);
+  e.preventDefault();
+});
+
+window.addEventListener('pointermove', (e) => {
+  if (!isDraggingEditorResizer) return;
+  const split = $('editor-split');
+  const rect = split.getBoundingClientRect();
+  setEditorSplitLeftWidth(e.clientX - rect.left - 5);
+});
+
+function stopEditorResizerDrag(e) {
+  if (!isDraggingEditorResizer) return;
+  isDraggingEditorResizer = false;
+  editorResizer.classList.remove('active');
+  if (e && e.pointerId != null) {
+    try { editorResizer.releasePointerCapture?.(e.pointerId); } catch (_) {}
+  }
+}
+
+window.addEventListener('pointerup', stopEditorResizerDrag);
+window.addEventListener('pointercancel', stopEditorResizerDrag);
+
+editorResizer.addEventListener('keydown', (e) => {
+  if (window.matchMedia('(max-width: 800px)').matches) return;
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  const split = $('editor-split');
+  const leftCol = split.querySelector('.editor-col');
+  const currentLeft = leftCol ? leftCol.getBoundingClientRect().width : ((split.getBoundingClientRect().width - 10) / 2);
+  const delta = e.key === 'ArrowLeft' ? -24 : 24;
+  setEditorSplitLeftWidth(currentLeft + delta);
+  e.preventDefault();
+});
 
 // Float preview for title input
 const titleInput = $('note-title');
@@ -2157,7 +2628,8 @@ $('btn-delete-note').addEventListener('click', async () => {
   }
 });
 
-$('btn-save-note').addEventListener('click', saveNote);
+$('btn-save-note').addEventListener('click', () => saveNote({ navigateAfterSave: false }));
+$('btn-save-note-and-open').addEventListener('click', () => saveNote({ navigateAfterSave: true }));
 
 $('btn-add-comment').addEventListener('click', () => {
   const area = $('comment-input-area');
