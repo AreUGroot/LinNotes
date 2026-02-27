@@ -117,6 +117,7 @@ def _init_db():
             opinion_id TEXT NOT NULL,
             parent_id TEXT,
             content TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             FOREIGN KEY (opinion_id) REFERENCES opinions(id) ON DELETE CASCADE
         );
@@ -126,6 +127,7 @@ def _init_db():
             opinion_id TEXT NOT NULL,
             parent_id TEXT,
             content TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
             resolved INTEGER NOT NULL DEFAULT 0,
             created_at TEXT NOT NULL,
             FOREIGN KEY (opinion_id) REFERENCES opinions(id) ON DELETE CASCADE
@@ -156,6 +158,16 @@ def _init_db():
             db.execute('ALTER TABLE opinions RENAME COLUMN source TO predictor')
         except sqlite3.OperationalError:
             pass
+
+    # Ensure created_by column exists for opinion comments/questions
+    try:
+        db.execute('SELECT created_by FROM opinion_comments LIMIT 1')
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE opinion_comments ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+    try:
+        db.execute('SELECT created_by FROM opinion_questions LIMIT 1')
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE opinion_questions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
 
     db.execute(
         'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)',
@@ -804,6 +816,7 @@ def _opinion_comment_to_dict(row):
         'opinion_id': row['opinion_id'],
         'parent_id': row['parent_id'],
         'content': row['content'],
+        'created_by': row['created_by'],
         'created_at': row['created_at'],
     }
 
@@ -833,8 +846,8 @@ def create_opinion_comment(oid):
     with _lock:
         db = _get_db()
         db.execute(
-            'INSERT INTO opinion_comments (id, opinion_id, parent_id, content, created_at) VALUES (?, ?, ?, ?, ?)',
-            (cid, oid, parent_id, content, now)
+            'INSERT INTO opinion_comments (id, opinion_id, parent_id, content, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (cid, oid, parent_id, content, g.current_user, now)
         )
         db.commit()
         row = db.execute('SELECT * FROM opinion_comments WHERE id = ?', (cid,)).fetchone()
@@ -861,6 +874,7 @@ def _opinion_question_to_dict(row):
         'opinion_id': row['opinion_id'],
         'parent_id': row['parent_id'],
         'content': row['content'],
+        'created_by': row['created_by'],
         'resolved': bool(row['resolved']),
         'created_at': row['created_at'],
     }
@@ -891,8 +905,8 @@ def create_opinion_question(oid):
     with _lock:
         db = _get_db()
         db.execute(
-            'INSERT INTO opinion_questions (id, opinion_id, parent_id, content, resolved, created_at) VALUES (?, ?, ?, ?, 0, ?)',
-            (qid, oid, parent_id, content, now)
+            'INSERT INTO opinion_questions (id, opinion_id, parent_id, content, created_by, resolved, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)',
+            (qid, oid, parent_id, content, g.current_user, now)
         )
         db.commit()
         row = db.execute('SELECT * FROM opinion_questions WHERE id = ?', (qid,)).fetchone()

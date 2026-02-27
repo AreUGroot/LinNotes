@@ -3355,9 +3355,11 @@ function renderOpinionComments(comments, oid) {
 }
 
 function renderOpCommentItem(c, isReply) {
+  const author = c.created_by ? escapeHtml(c.created_by) : '未知用户';
   return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
     '<div class="cq-item-header">' +
       '<span class="cq-icon">💬</span>' +
+      '<span>' + author + '</span>' +
       '<span>' + formatTime(c.created_at) + '</span>' +
     '</div>' +
     '<div class="cq-item-body">' + escapeHtml(c.content) + '</div>' +
@@ -3451,6 +3453,7 @@ function renderOpinionQuestions(questions, oid) {
 function renderOpQuestionItem(q, isReply) {
   const iconClass = q.resolved ? 'resolved' : 'question';
   const icon = q.resolved ? '✅' : '❓';
+  const author = q.created_by ? escapeHtml(q.created_by) : '未知用户';
   const resolveBtn = (!isReply && !q.resolved)
     ? '<button class="btn-toggle-op-resolved btn-resolve" data-id="' + q.id + '">已解决</button>'
     : (!isReply && q.resolved)
@@ -3460,6 +3463,7 @@ function renderOpQuestionItem(q, isReply) {
   return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
     '<div class="cq-item-header">' +
       '<span class="cq-icon ' + iconClass + '">' + icon + '</span>' +
+      '<span>' + author + '</span>' +
       '<span>' + formatTime(q.created_at) + '</span>' +
       (q.resolved && !isReply ? '<span style="color:#38a169;font-weight:600;">已解决</span>' : '') +
     '</div>' +
