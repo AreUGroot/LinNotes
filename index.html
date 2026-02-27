@@ -812,6 +812,158 @@ button {
   word-break: break-word;
 }
 #fp-body .katex-display { margin: 6px 0; overflow-x: auto; }
+
+/* ── Nav Tabs ──────────────────────────────────────────────────────────── */
+.nav-tabs {
+  display: flex;
+  gap: 4px;
+  margin-right: 16px;
+}
+.nav-tab {
+  background: none;
+  color: var(--sub);
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  border: 1.5px solid transparent;
+}
+.nav-tab:hover { background: #eef0fd; color: var(--pri); }
+.nav-tab.active {
+  background: #eef0fd;
+  color: var(--pri);
+  border-color: #c3cbf7;
+  font-weight: 600;
+}
+
+/* ── Opinions List View ───────────────────────────────────────────────── */
+#view-opinions-list {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+/* ── Opinions Form View ───────────────────────────────────────────────── */
+#view-opinions-form {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Opinions Detail View ─────────────────────────────────────────────── */
+#view-opinions-detail {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── Opinion card extras ──────────────────────────────────────────────── */
+.opinion-card-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.78rem;
+  color: var(--sub);
+  margin-top: 4px;
+}
+.badge-type {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.badge-type.opinion { background: #fef3c7; color: #92400e; }
+.badge-type.prediction { background: #dbeafe; color: #1e40af; }
+.badge-creator {
+  background: #f3e8ff;
+  color: #7c3aed;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+/* ── Rating section in detail ─────────────────────────────────────────── */
+.rating-section {
+  margin-top: 20px;
+  margin-bottom: 8px;
+  padding: 16px 20px;
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 12px;
+}
+.rating-section h4 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.rating-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.rating-row label {
+  font-size: 0.82rem;
+  color: var(--sub);
+  min-width: 80px;
+}
+.rating-row input[type="text"] {
+  min-width: 160px;
+}
+.rating-history {
+  margin-top: 10px;
+  font-size: 0.8rem;
+  color: var(--sub);
+}
+.rating-history-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--bdr);
+}
+.rating-history-item .rating-history-main {
+  flex: 1;
+  min-width: 220px;
+}
+.rating-history-item .btn-delete-op-rating {
+  font-size: 0.76rem;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: #fff5f5;
+  color: #e53e3e;
+  border: 1px solid #fed7d7;
+}
+.rating-history-item .btn-delete-op-rating:hover {
+  background: #ffe5e5;
+  color: #c53030;
+}
+
+/* ── Type selector ────────────────────────────────────────────────────── */
+.type-selector {
+  display: flex;
+  gap: 8px;
+}
+.type-btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border: 1.5px solid var(--bdr);
+  background: var(--white);
+  color: var(--text);
+}
+.type-btn.active {
+  border-color: var(--pri);
+  background: #eef0fd;
+  color: var(--pri);
+  font-weight: 600;
+}
 </style>
 </head>
 <body>
@@ -819,6 +971,10 @@ button {
 <!-- ── Top Navigation ──────────────────────────────────────────────────── -->
 <nav class="top-nav">
   <span class="brand">Lin的笔记</span>
+  <div class="nav-tabs" id="nav-tabs" style="display:none;">
+    <button class="nav-tab active" id="nav-tab-notes" data-tab="notes">笔记</button>
+    <button class="nav-tab" id="nav-tab-opinions" data-tab="opinions">观点与预测</button>
+  </div>
   <span class="spacer"></span>
   <div class="account-box">
     <span id="auth-user-label">未登录</span>
@@ -986,6 +1142,160 @@ button {
   </div>
 </div>
 
+<!-- ── View: Opinions List ──────────────────────────────────────────────── -->
+<div id="view-opinions-list" class="page">
+  <div class="list-header">
+    <h2>观点与预测</h2>
+    <button class="btn-primary" id="btn-add-opinion">+ 添加</button>
+  </div>
+
+  <div class="filter-bar">
+    <select id="op-filter-type">
+      <option value="">全部类型</option>
+      <option value="观点">观点</option>
+      <option value="预测">预测</option>
+    </select>
+    <select id="op-filter-creator">
+      <option value="">所有创建人</option>
+    </select>
+    <select id="op-filter-predictor">
+      <option value="">所有预测人</option>
+    </select>
+    <select id="op-filter-sort">
+      <option value="updated_desc">最近修改</option>
+      <option value="created_desc">最新创建</option>
+      <option value="created_asc">最早创建</option>
+      <option value="rating_desc">准确性/质量 高→低</option>
+      <option value="rating_asc">准确性/质量 低→高</option>
+      <option value="measure_time_desc">衡量时间 新→旧</option>
+      <option value="measure_time_asc">衡量时间 旧→新</option>
+    </select>
+  </div>
+
+  <div id="opinion-list"></div>
+</div>
+
+<!-- ── View: Opinions Form ─────────────────────────────────────────────── -->
+<div id="view-opinions-form" class="page">
+  <div class="form-header">
+    <button class="btn-ghost" id="btn-back-to-op-list">← 返回</button>
+    <h2 id="op-form-title-label">添加观点/预测</h2>
+  </div>
+
+  <!-- Type -->
+  <div class="form-row">
+    <div class="section-label">类型 *</div>
+    <div class="type-selector" id="op-type-selector">
+      <button type="button" class="type-btn active" data-type="观点">观点</button>
+      <button type="button" class="type-btn" data-type="预测">预测</button>
+    </div>
+  </div>
+
+  <!-- Sub-topic -->
+  <div class="form-row">
+    <div class="section-label">二级主题</div>
+    <input type="text" id="op-subtopic" class="full-width" placeholder="输入二级主题（可选）" style="width:100%;">
+  </div>
+
+  <!-- Title -->
+  <div class="form-row">
+    <div class="section-label">标题</div>
+    <input type="text" id="op-title" class="full-width" placeholder="输入标题（可选），支持 $LaTeX$ 公式" style="width:100%;">
+    <div id="op-title-preview" class="render-box title-preview-box"><span class="empty-hint">标题实时预览</span></div>
+  </div>
+
+  <!-- Predictor -->
+  <div class="form-row">
+    <div class="section-label">预测人</div>
+    <input type="text" id="op-predictor" class="full-width" placeholder="预测人（默认为当前用户）" style="width:100%;">
+  </div>
+
+  <!-- Time Scale (prediction only) -->
+  <div class="form-row" id="op-timescale-row" style="display:none;">
+    <div class="section-label">时间尺度</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <input type="number" id="op-ts-year" min="0" style="width:70px;padding:7px 10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:0.88rem;" placeholder="0"> <span style="font-size:0.85rem;color:var(--sub);">年</span>
+      <input type="number" id="op-ts-month" min="0" max="11" style="width:70px;padding:7px 10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:0.88rem;" placeholder="0"> <span style="font-size:0.85rem;color:var(--sub);">月</span>
+      <input type="number" id="op-ts-day" min="0" style="width:70px;padding:7px 10px;border:1.5px solid var(--bdr);border-radius:8px;font-size:0.88rem;" placeholder="0"> <span style="font-size:0.85rem;color:var(--sub);">日</span>
+    </div>
+  </div>
+
+  <!-- Content Editor -->
+  <div class="form-row">
+    <div class="section-label">正文</div>
+    <textarea id="op-editor-md" placeholder="在此输入内容...&#10;&#10;支持 Markdown 和 LaTeX 公式" style="width:100%;min-height:200px;"></textarea>
+    <div class="section-label" style="margin-top:10px;">正文预览</div>
+    <div id="op-content-preview" class="render-box" style="min-height:60px;"><span class="empty-hint">正文实时预览</span></div>
+  </div>
+
+  <!-- Save -->
+  <div class="form-actions">
+    <button class="btn-primary" id="btn-save-opinion">保存</button>
+    <button class="btn-ghost" id="btn-save-opinion-open" type="button">保存并查看</button>
+    <span id="op-form-msg"></span>
+  </div>
+</div>
+
+<!-- ── View: Opinions Detail ───────────────────────────────────────────── -->
+<div id="view-opinions-detail" class="page">
+  <div class="detail-back">
+    <button class="btn-ghost" id="btn-back-from-op-detail">← 返回列表</button>
+  </div>
+  <div class="detail-header">
+    <div class="detail-title" id="op-detail-title"></div>
+    <div class="detail-meta" id="op-detail-meta"></div>
+  </div>
+  <div class="detail-actions">
+    <button class="btn-primary" id="btn-edit-opinion">编辑</button>
+    <button class="btn-danger" id="btn-delete-opinion">删除</button>
+  </div>
+  <div class="detail-body render-box" id="op-detail-body"></div>
+
+  <!-- Rating Section -->
+  <div class="rating-section" id="op-rating-section">
+    <h4 id="op-rating-label">评分</h4>
+    <div class="rating-row">
+      <label>评分 (1-5星):</label>
+      <div class="stars-input" id="op-rating-stars">
+        <button type="button" class="star-btn" data-val="1">★</button>
+        <button type="button" class="star-btn" data-val="2">★</button>
+        <button type="button" class="star-btn" data-val="3">★</button>
+        <button type="button" class="star-btn" data-val="4">★</button>
+        <button type="button" class="star-btn" data-val="5">★</button>
+      </div>
+    </div>
+    <div class="rating-row" id="op-measure-time-row" style="display:none;">
+      <label>衡量时间:</label>
+      <input type="date" id="op-measure-time">
+    </div>
+    <div class="rating-row">
+      <button class="btn-primary" id="btn-submit-rating" style="padding:6px 16px;font-size:0.82rem;">提交评分</button>
+      <span id="op-rating-msg"></span>
+    </div>
+    <div class="rating-history" id="op-rating-history"></div>
+  </div>
+
+  <!-- Comments Section -->
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>评论</h3>
+      <button class="cq-add-btn" id="btn-add-op-comment">+ 添加评论</button>
+    </div>
+    <div id="op-comment-input-area"></div>
+    <div id="op-comment-list"></div>
+  </div>
+
+  <!-- Questions Section -->
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>问题</h3>
+      <button class="cq-add-btn" id="btn-add-op-question">+ 添加问题</button>
+    </div>
+    <div id="op-question-input-area"></div>
+    <div id="op-question-list"></div>
+  </div>
+</div>
+
 <!-- ── Floating KaTeX Preview ──────────────────────────────────────────── -->
 <div id="float-preview">
   <div id="fp-header">
@@ -1020,7 +1330,7 @@ const KATEX_OPTS = {
 };
 
 const AUTH_KEY = 'lin-notes-auth';
-let authState = { token: '', username: '' };
+let authState = { token: '', username: '', role: '' };
 
 let allNotes = [];
 let allTopics = [];
@@ -1038,6 +1348,13 @@ let topicFormState = {
   segments: [],
   pendingNewDepth: null,
 };
+
+// Opinions state
+let allOpinions = [];
+let editingOpinionId = null;
+let viewingOpinionId = null;
+let currentOpType = '观点';
+let currentOpRating = 0;
 
 /* ════════════════════════════════════════════════════════════════════════
    Utilities
@@ -1374,7 +1691,7 @@ function persistAuthState() {
 }
 
 function clearAuthState() {
-  authState = { token: '', username: '' };
+  authState = { token: '', username: '', role: '' };
   localStorage.removeItem(AUTH_KEY);
   setLoggedInUI(false);
 }
@@ -1383,6 +1700,15 @@ function setLoggedInUI(loggedIn) {
   $('auth-overlay').style.display = loggedIn ? 'none' : 'flex';
   $('btn-logout').style.display = loggedIn ? '' : 'none';
   $('auth-user-label').textContent = loggedIn ? authState.username : '未登录';
+
+  const navTabs = $('nav-tabs');
+  const isAdmin = authState.role === 'admin';
+  if (loggedIn) {
+    navTabs.style.display = '';
+    $('nav-tab-notes').style.display = isAdmin ? '' : 'none';
+  } else {
+    navTabs.style.display = 'none';
+  }
 }
 
 async function apiFetch(url, opts = {}) {
@@ -1420,9 +1746,15 @@ async function doLogin() {
     }
     authState.token = data.token;
     authState.username = data.username;
+    authState.role = data.role || 'user';
     persistAuthState();
     setLoggedInUI(true);
-    loadAllData();
+    if (authState.role === 'admin') {
+      loadAllData();
+    } else {
+      loadOpinions();
+      switchToSection('opinions');
+    }
   } catch(e) {
     showMsg('login-msg', '网络错误', 'err');
   }
@@ -1437,8 +1769,16 @@ async function restoreSession() {
   try {
     const res = await apiFetch('/api/auth/me');
     if (res.ok) {
+      const data = await res.json();
+      authState.role = data.role || authState.role || 'user';
+      persistAuthState();
       setLoggedInUI(true);
-      loadAllData();
+      if (authState.role === 'admin') {
+        loadAllData();
+      } else {
+        loadOpinions();
+        switchToSection('opinions');
+      }
     } else {
       clearAuthState();
     }
@@ -1455,8 +1795,22 @@ function showView(name) {
   $('view-list').classList.toggle('active', name === 'list');
   $('view-form').classList.toggle('active', name === 'form');
   $('view-detail').classList.toggle('active', name === 'detail');
+  $('view-opinions-list').classList.toggle('active', name === 'opinions-list');
+  $('view-opinions-form').classList.toggle('active', name === 'opinions-form');
+  $('view-opinions-detail').classList.toggle('active', name === 'opinions-detail');
   if (name === 'form') ensureNoteVditor();
   window.scrollTo(0, 0);
+}
+
+function switchToSection(section) {
+  // section: 'notes' or 'opinions'
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === section));
+  if (section === 'notes') {
+    showView('list');
+  } else {
+    loadOpinions();
+    showView('opinions-list');
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2599,6 +2953,536 @@ function renderQuestionItem(q, isReply) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   Opinions & Predictions
+   ════════════════════════════════════════════════════════════════════════ */
+async function loadOpinions() {
+  try {
+    const type = $('op-filter-type').value;
+    const sort = $('op-filter-sort').value;
+    const created_by = $('op-filter-creator').value;
+    const predictor = $('op-filter-predictor').value;
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    if (sort) params.set('sort', sort);
+    if (created_by) params.set('created_by', created_by);
+    if (predictor) params.set('predictor', predictor);
+    const res = await apiFetch('/api/opinions?' + params);
+    if (!res.ok) return;
+    allOpinions = await res.json();
+    renderOpinionList();
+    loadOpinionFilterOptions();
+  } catch(e) {}
+}
+
+async function loadOpinionFilterOptions() {
+  try {
+    const res = await apiFetch('/api/opinions/filter-options');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const creatorSel = $('op-filter-creator');
+    const creatorVal = creatorSel.value;
+    creatorSel.innerHTML = '<option value="">所有创建人</option>';
+    (data.creators || []).forEach(c => {
+      creatorSel.innerHTML += '<option value="' + escapeHtml(c) + '">' + escapeHtml(c) + '</option>';
+    });
+    creatorSel.value = creatorVal;
+
+    const predictorSel = $('op-filter-predictor');
+    const predictorVal = predictorSel.value;
+    predictorSel.innerHTML = '<option value="">所有预测人</option>';
+    (data.predictors || []).forEach(p => {
+      predictorSel.innerHTML += '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>';
+    });
+    predictorSel.value = predictorVal;
+  } catch(e) {}
+}
+
+function renderOpinionList() {
+  const container = $('opinion-list');
+  if (allOpinions.length === 0) {
+    container.innerHTML = '<div class="empty-hint">暂无观点或预测，点击"添加"开始记录</div>';
+    return;
+  }
+
+  container.innerHTML = allOpinions.map(op => {
+    const isP = op.type === '预测';
+    const typeClass = isP ? 'prediction' : 'opinion';
+
+    let extraHtml = '<span class="badge-creator">创建人: ' + escapeHtml(op.created_by) + '</span>';
+    if (op.predictor) extraHtml += '<span class="badge-creator">预测人: ' + escapeHtml(op.predictor) + '</span>';
+    if (!isP && op.avg_rating) {
+      extraHtml += '<span>观点质量: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
+    }
+    if (isP) {
+      if (op.time_scale) extraHtml += '<span>时间尺度: ' + escapeHtml(op.time_scale) + '</span>';
+      if (op.avg_rating) extraHtml += '<span>预测准确性: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
+      if (op.measure_time) extraHtml += '<span>衡量时间: ' + escapeHtml(op.measure_time) + '</span>';
+    }
+
+    return '<div class="note-card" data-opinion-id="' + op.id + '">' +
+      '<div class="note-card-title" data-katex>' + escapeHtml(op.title || '(无标题)') + '</div>' +
+      '<div class="note-card-meta">' +
+        '<span class="badge-type ' + typeClass + '">' + escapeHtml(op.type) + '</span>' +
+        '<span class="badge-topic">' + escapeHtml(formatTopicLabel(op.topic)) + '</span>' +
+        extraHtml +
+        '<span>' + formatTime(op.created_at) + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+
+  container.querySelectorAll('[data-katex]').forEach(el => {
+    renderMathInElement(el, KATEX_OPTS);
+  });
+
+  container.querySelectorAll('.note-card').forEach(card => {
+    card.addEventListener('click', () => openOpinionDetail(card.dataset.opinionId));
+  });
+}
+
+function openOpinionCreateForm() {
+  editingOpinionId = null;
+  $('op-form-title-label').textContent = '添加观点/预测';
+  $('op-title').value = '';
+  $('op-title-preview').innerHTML = '<span class="empty-hint">标题实时预览</span>';
+  $('op-subtopic').value = '';
+  $('op-predictor').value = authState.username || '';
+  $('op-ts-year').value = '';
+  $('op-ts-month').value = '';
+  $('op-ts-day').value = '';
+  $('op-editor-md').value = '';
+  $('op-content-preview').innerHTML = '<span class="empty-hint">正文实时预览</span>';
+  currentOpType = '观点';
+  updateOpTypeSelector();
+  showView('opinions-form');
+}
+
+function updateOpTypeSelector() {
+  document.querySelectorAll('#op-type-selector .type-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.type === currentOpType);
+  });
+  $('op-timescale-row').style.display = currentOpType === '预测' ? '' : 'none';
+}
+
+function parseTimeScale(ts) {
+  const result = { year: '', month: '', day: '' };
+  if (!ts) return result;
+  const yMatch = ts.match(/(\d+)\s*年/);
+  const mMatch = ts.match(/(\d+)\s*月/);
+  const dMatch = ts.match(/(\d+)\s*日/);
+  if (yMatch) result.year = yMatch[1];
+  if (mMatch) result.month = mMatch[1];
+  if (dMatch) result.day = dMatch[1];
+  return result;
+}
+
+function buildTimeScale() {
+  const y = ($('op-ts-year').value || '').trim();
+  const m = ($('op-ts-month').value || '').trim();
+  const d = ($('op-ts-day').value || '').trim();
+  const parts = [];
+  if (y && y !== '0') parts.push(y + '年');
+  if (m && m !== '0') parts.push(m + '月');
+  if (d && d !== '0') parts.push(d + '日');
+  return parts.join('');
+}
+
+async function openOpinionEditForm(oid) {
+  try {
+    const res = await apiFetch('/api/opinions/' + oid);
+    if (!res.ok) return;
+    const op = await res.json();
+    editingOpinionId = oid;
+    $('op-form-title-label').textContent = '编辑观点/预测';
+    currentOpType = op.type;
+    updateOpTypeSelector();
+
+    const parts = splitTopicPath(op.topic);
+    $('op-subtopic').value = parts.length > 1 ? joinTopicPath(parts.slice(1)) : '';
+    $('op-title').value = op.title || '';
+    renderOpTitlePreview(op.title || '');
+    $('op-predictor').value = op.predictor || '';
+
+    const ts = parseTimeScale(op.time_scale || '');
+    $('op-ts-year').value = ts.year;
+    $('op-ts-month').value = ts.month;
+    $('op-ts-day').value = ts.day;
+
+    $('op-editor-md').value = op.content || '';
+    renderMarkdownKatex(op.content || '', $('op-content-preview'));
+    showView('opinions-form');
+  } catch(e) {}
+}
+
+async function saveOpinion(options = {}) {
+  const navigateAfterSave = !!options.navigateAfterSave;
+  const subtopic = $('op-subtopic').value.trim();
+  const topic = subtopic ? (currentOpType + ' / ' + subtopic) : currentOpType;
+  const title = $('op-title').value.trim();
+  const content = $('op-editor-md').value;
+  const predictor = $('op-predictor').value.trim();
+  const time_scale = currentOpType === '预测' ? buildTimeScale() : '';
+
+  const body = { type: currentOpType, topic, title, content, predictor, time_scale };
+  const url = editingOpinionId ? '/api/opinions/' + editingOpinionId : '/api/opinions';
+  const method = editingOpinionId ? 'PUT' : 'POST';
+
+  try {
+    const res = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showMsg('op-form-msg', data.error || '保存失败', 'err');
+      return;
+    }
+
+    const saved = data.opinion || null;
+    const savedId = (saved && saved.id) ? saved.id : editingOpinionId;
+    if (!editingOpinionId && savedId) {
+      editingOpinionId = savedId;
+      $('op-form-title-label').textContent = '编辑观点/预测';
+    }
+
+    showMsg('op-form-msg', '保存成功！', 'ok');
+    await loadOpinions();
+
+    if (!navigateAfterSave) return;
+    if (savedId) {
+      setTimeout(() => openOpinionDetail(savedId), 300);
+    } else {
+      setTimeout(() => showView('opinions-list'), 300);
+    }
+  } catch(e) {
+    showMsg('op-form-msg', '网络错误', 'err');
+  }
+}
+
+async function openOpinionDetail(oid) {
+  try {
+    const res = await apiFetch('/api/opinions/' + oid);
+    if (!res.ok) return;
+    const op = await res.json();
+    viewingOpinionId = oid;
+
+    // Title
+    const titleEl = $('op-detail-title');
+    titleEl.textContent = op.title || '(无标题)';
+    renderMathInElement(titleEl, KATEX_OPTS);
+
+    // Meta
+    const isP = op.type === '预测';
+    const typeClass = isP ? 'prediction' : 'opinion';
+    let metaHtml = '<span class="badge-type ' + typeClass + '">' + escapeHtml(op.type) + '</span>' +
+      '<span class="badge-topic">' + escapeHtml(formatTopicLabel(op.topic)) + '</span>' +
+      '<span class="badge-creator">创建人: ' + escapeHtml(op.created_by) + '</span>';
+    if (op.predictor) metaHtml += '<span class="badge-creator">预测人: ' + escapeHtml(op.predictor) + '</span>';
+    if (isP && op.time_scale) metaHtml += '<span>时间尺度: ' + escapeHtml(op.time_scale) + '</span>';
+    metaHtml += '<span>创建: ' + formatTime(op.created_at) + '</span>' +
+      '<span>修改: ' + formatTime(op.updated_at) + '</span>';
+    $('op-detail-meta').innerHTML = metaHtml;
+
+    // Body
+    renderMarkdownKatex(op.content || '', $('op-detail-body'));
+
+    // Rating section
+    $('op-rating-label').textContent = isP ? '预测准确性' : '观点质量';
+    $('op-measure-time-row').style.display = isP ? '' : 'none';
+    currentOpRating = 0;
+    updateOpRatingStars();
+    $('op-measure-time').value = '';
+    loadOpinionRatings(oid);
+
+    // Comments & Questions
+    $('op-comment-input-area').innerHTML = '';
+    $('op-question-input-area').innerHTML = '';
+    loadOpinionComments(oid);
+    loadOpinionQuestions(oid);
+
+    showView('opinions-detail');
+  } catch(e) {}
+}
+
+function updateOpRatingStars() {
+  document.querySelectorAll('#op-rating-stars .star-btn').forEach(btn => {
+    btn.classList.toggle('filled', parseInt(btn.dataset.val) <= currentOpRating);
+  });
+}
+
+async function loadOpinionRatings(oid) {
+  try {
+    const res = await apiFetch('/api/opinions/' + oid + '/ratings');
+    if (!res.ok) return;
+    const ratings = await res.json();
+    const histContainer = $('op-rating-history');
+    if (!ratings.length) {
+      histContainer.innerHTML = '<div style="color:var(--sub);font-size:0.8rem;">暂无评分记录</div>';
+      return;
+    }
+    histContainer.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">评分记录:</div>' +
+      ratings.map(r => {
+        let html = '<div class="rating-history-item"><div class="rating-history-main">' + renderStars(r.rating) +
+          ' <span style="color:var(--sub)">- ' + escapeHtml(r.created_by) + ' ' + formatTime(r.created_at) + '</span>';
+        if (r.measure_time) html += ' <span style="color:var(--sub)">衡量时间: ' + escapeHtml(r.measure_time) + '</span>';
+        html += '</div>';
+        html += '<button class="btn-delete-op-rating" data-id="' + r.id + '">删除</button>';
+        return html + '</div>';
+      }).join('');
+
+    histContainer.querySelectorAll('.btn-delete-op-rating').forEach(btn => {
+      btn.addEventListener('click', () => {
+        deleteOpinionRating(oid, btn.dataset.id);
+      });
+    });
+  } catch(e) {}
+}
+
+async function deleteOpinionRating(oid, ratingId) {
+  if (!ratingId) return;
+  if (!confirm('确定删除这条评分记录吗？')) return;
+  try {
+    const res = await apiFetch('/api/opinion-ratings/' + ratingId, { method: 'DELETE' });
+    if (!res.ok) {
+      showMsg('op-rating-msg', '删除失败', 'err');
+      return;
+    }
+    showMsg('op-rating-msg', '评分记录已删除', 'ok');
+    loadOpinionRatings(oid);
+  } catch(e) {
+    showMsg('op-rating-msg', '网络错误', 'err');
+  }
+}
+
+async function submitOpinionRating() {
+  if (!viewingOpinionId || currentOpRating < 1) {
+    showMsg('op-rating-msg', '请选择评分', 'err');
+    return;
+  }
+  const measure_time = $('op-measure-time').value.trim();
+  try {
+    const res = await apiFetch('/api/opinions/' + viewingOpinionId + '/ratings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rating: currentOpRating, measure_time }),
+    });
+    if (!res.ok) {
+      showMsg('op-rating-msg', '提交失败', 'err');
+      return;
+    }
+    showMsg('op-rating-msg', '评分已提交！', 'ok');
+    currentOpRating = 0;
+    updateOpRatingStars();
+    $('op-measure-time').value = '';
+    loadOpinionRatings(viewingOpinionId);
+  } catch(e) {
+    showMsg('op-rating-msg', '网络错误', 'err');
+  }
+}
+
+// Opinion comments
+async function loadOpinionComments(oid) {
+  try {
+    const res = await apiFetch('/api/opinions/' + oid + '/comments');
+    if (!res.ok) return;
+    const comments = await res.json();
+    renderOpinionComments(comments, oid);
+  } catch(e) {}
+}
+
+function renderOpinionComments(comments, oid) {
+  const container = $('op-comment-list');
+  const topLevel = comments.filter(c => !c.parent_id);
+  const replies = comments.filter(c => c.parent_id);
+  const replyMap = {};
+  replies.forEach(r => {
+    if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
+    replyMap[r.parent_id].push(r);
+  });
+
+  let html = '';
+  topLevel.forEach(c => {
+    html += renderOpCommentItem(c, false);
+    (replyMap[c.id] || []).forEach(r => {
+      html += renderOpCommentItem(r, true);
+    });
+  });
+
+  container.innerHTML = html || '';
+
+  container.querySelectorAll('.cq-item-body').forEach(el => {
+    renderMathInElement(el, KATEX_OPTS);
+  });
+
+  container.querySelectorAll('.btn-reply-op-comment').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parentId = btn.dataset.id;
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '回复评论...',
+        submitLabel: '提交回复',
+        isReply: true,
+        onSubmit: async (text) => {
+          await apiFetch('/api/opinions/' + oid + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text, parent_id: parentId }),
+          });
+          wrapper.remove();
+          loadOpinionComments(oid);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-op-comment').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const isReply = btn.dataset.reply === '1';
+      const msg = isReply ? '确定删除这条回复吗？' : '确定删除这条评论吗？其回复也会一并删除。';
+      if (!confirm(msg)) return;
+      try {
+        const res = await apiFetch('/api/opinion-comments/' + btn.dataset.id, { method: 'DELETE' });
+        if (res.ok) loadOpinionComments(oid);
+      } catch(e) {}
+    });
+  });
+}
+
+function renderOpCommentItem(c, isReply) {
+  return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
+    '<div class="cq-item-header">' +
+      '<span class="cq-icon">💬</span>' +
+      '<span>' + formatTime(c.created_at) + '</span>' +
+    '</div>' +
+    '<div class="cq-item-body">' + escapeHtml(c.content) + '</div>' +
+    '<div class="cq-item-actions">' +
+      (isReply ? '' : '<button class="btn-reply-op-comment" data-id="' + c.id + '">回复</button>') +
+      '<button class="btn-delete-op-comment btn-delete-cq" data-id="' + c.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// Opinion questions
+async function loadOpinionQuestions(oid) {
+  try {
+    const res = await apiFetch('/api/opinions/' + oid + '/questions');
+    if (!res.ok) return;
+    const questions = await res.json();
+    renderOpinionQuestions(questions, oid);
+  } catch(e) {}
+}
+
+function renderOpinionQuestions(questions, oid) {
+  const container = $('op-question-list');
+  const topLevel = questions.filter(q => !q.parent_id);
+  const replies = questions.filter(q => q.parent_id);
+  const replyMap = {};
+  replies.forEach(r => {
+    if (!replyMap[r.parent_id]) replyMap[r.parent_id] = [];
+    replyMap[r.parent_id].push(r);
+  });
+
+  let html = '';
+  topLevel.forEach(q => {
+    html += renderOpQuestionItem(q, false);
+    (replyMap[q.id] || []).forEach(r => {
+      html += renderOpQuestionItem(r, true);
+    });
+  });
+
+  container.innerHTML = html || '';
+
+  container.querySelectorAll('.cq-item-body').forEach(el => {
+    renderMathInElement(el, KATEX_OPTS);
+  });
+
+  container.querySelectorAll('.btn-toggle-op-resolved').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await apiFetch('/api/opinion-questions/' + btn.dataset.id + '/toggle-resolved', { method: 'POST' });
+      loadOpinionQuestions(oid);
+    });
+  });
+
+  container.querySelectorAll('.btn-reply-op-question').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parentId = btn.dataset.id;
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '回复问题...',
+        submitLabel: '提交回复',
+        isReply: true,
+        onSubmit: async (text) => {
+          await apiFetch('/api/opinions/' + oid + '/questions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text, parent_id: parentId }),
+          });
+          wrapper.remove();
+          loadOpinionQuestions(oid);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
+  container.querySelectorAll('.btn-delete-op-question').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const isReply = btn.dataset.reply === '1';
+      const msg = isReply ? '确定删除这条回复吗？' : '确定删除这个问题吗？其回复也会一并删除。';
+      if (!confirm(msg)) return;
+      try {
+        const res = await apiFetch('/api/opinion-questions/' + btn.dataset.id, { method: 'DELETE' });
+        if (res.ok) loadOpinionQuestions(oid);
+      } catch(e) {}
+    });
+  });
+}
+
+function renderOpQuestionItem(q, isReply) {
+  const iconClass = q.resolved ? 'resolved' : 'question';
+  const icon = q.resolved ? '✅' : '❓';
+  const resolveBtn = (!isReply && !q.resolved)
+    ? '<button class="btn-toggle-op-resolved btn-resolve" data-id="' + q.id + '">已解决</button>'
+    : (!isReply && q.resolved)
+    ? '<button class="btn-toggle-op-resolved btn-unresolve" data-id="' + q.id + '">改为未解决</button>'
+    : '';
+
+  return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
+    '<div class="cq-item-header">' +
+      '<span class="cq-icon ' + iconClass + '">' + icon + '</span>' +
+      '<span>' + formatTime(q.created_at) + '</span>' +
+      (q.resolved && !isReply ? '<span style="color:#38a169;font-weight:600;">已解决</span>' : '') +
+    '</div>' +
+    '<div class="cq-item-body">' + escapeHtml(q.content) + '</div>' +
+    '<div class="cq-item-actions">' +
+      (isReply ? '' : resolveBtn + '<button class="btn-reply-op-question" data-id="' + q.id + '">回复</button>') +
+      '<button class="btn-delete-op-question btn-delete-cq" data-id="' + q.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
+    '</div>' +
+  '</div>';
+}
+
+// Opinion title/content live preview
+function renderOpTitlePreview(src) {
+  const container = $('op-title-preview');
+  if (!src || !src.trim()) {
+    container.innerHTML = '<span class="empty-hint">标题实时预览</span>';
+    return;
+  }
+  container.textContent = src;
+  renderMathInElement(container, KATEX_OPTS);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    Event Listeners
    ════════════════════════════════════════════════════════════════════════ */
 $('btn-login').addEventListener('click', doLogin);
@@ -2697,6 +3581,105 @@ $('btn-topic-commit-level').addEventListener('click', () => {
 $('filter-topic').addEventListener('change', loadNotes);
 $('filter-tag').addEventListener('change', loadNotes);
 $('filter-sort').addEventListener('change', loadNotes);
+
+// ── Nav tabs ──
+$('nav-tabs').addEventListener('click', (e) => {
+  const tab = e.target.closest('.nav-tab');
+  if (!tab) return;
+  switchToSection(tab.dataset.tab);
+});
+
+// ── Opinion event listeners ──
+$('btn-add-opinion').addEventListener('click', openOpinionCreateForm);
+$('btn-back-to-op-list').addEventListener('click', () => { loadOpinions(); showView('opinions-list'); });
+$('btn-back-from-op-detail').addEventListener('click', () => { loadOpinions(); showView('opinions-list'); });
+
+$('op-type-selector').addEventListener('click', (e) => {
+  const btn = e.target.closest('.type-btn');
+  if (!btn) return;
+  currentOpType = btn.dataset.type;
+  updateOpTypeSelector();
+});
+
+$('btn-save-opinion').addEventListener('click', () => saveOpinion({ navigateAfterSave: false }));
+$('btn-save-opinion-open').addEventListener('click', () => saveOpinion({ navigateAfterSave: true }));
+
+$('btn-edit-opinion').addEventListener('click', () => {
+  if (viewingOpinionId) openOpinionEditForm(viewingOpinionId);
+});
+
+$('btn-delete-opinion').addEventListener('click', async () => {
+  if (!viewingOpinionId) return;
+  if (!confirm('确定要删除吗？此操作不可撤销。')) return;
+  try {
+    const res = await apiFetch('/api/opinions/' + viewingOpinionId, { method: 'DELETE' });
+    if (!res.ok) { alert('删除失败'); return; }
+    await loadOpinions();
+    showView('opinions-list');
+  } catch(e) { alert('删除失败'); }
+});
+
+$('op-rating-stars').addEventListener('click', (e) => {
+  const btn = e.target.closest('.star-btn');
+  if (!btn) return;
+  const val = parseInt(btn.dataset.val);
+  currentOpRating = (currentOpRating === val) ? 0 : val;
+  updateOpRatingStars();
+});
+
+$('btn-submit-rating').addEventListener('click', submitOpinionRating);
+
+$('btn-add-op-comment').addEventListener('click', () => {
+  const area = $('op-comment-input-area');
+  if (area.querySelector('.cq-input-box')) return;
+  createCQInputBox({
+    container: area,
+    placeholder: '输入评论...',
+    submitLabel: '提交评论',
+    onSubmit: async (text) => {
+      await apiFetch('/api/opinions/' + viewingOpinionId + '/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadOpinionComments(viewingOpinionId);
+    },
+  });
+});
+
+$('op-filter-type').addEventListener('change', loadOpinions);
+$('op-filter-sort').addEventListener('change', loadOpinions);
+$('op-filter-creator').addEventListener('change', loadOpinions);
+$('op-filter-predictor').addEventListener('change', loadOpinions);
+
+// Opinion title live preview
+$('op-title').addEventListener('input', function() {
+  renderOpTitlePreview(this.value);
+});
+
+// Opinion content live preview
+$('op-editor-md').addEventListener('input', function() {
+  renderMarkdownKatex(this.value, $('op-content-preview'));
+});
+
+// Opinion questions
+$('btn-add-op-question').addEventListener('click', () => {
+  const area = $('op-question-input-area');
+  if (area.querySelector('.cq-input-box')) return;
+  createCQInputBox({
+    container: area,
+    placeholder: '输入问题，支持 $LaTeX$ 公式...',
+    submitLabel: '提交问题',
+    onSubmit: async (text) => {
+      await apiFetch('/api/opinions/' + viewingOpinionId + '/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadOpinionQuestions(viewingOpinionId);
+    },
+  });
+});
 
 /* ════════════════════════════════════════════════════════════════════════
    Marked Configuration
