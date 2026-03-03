@@ -662,6 +662,31 @@ button {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 .editor-split.vditor-fallback-hidden { display: none; }
+.vditor--fullscreen { z-index: 200 !important; }
+
+/* ── Vditor Find/Replace Panel ─────────────────────────────────────────── */
+.vditor-find-panel {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  padding: 6px 10px;
+  background: var(--white); border-bottom: 1px solid var(--bdr);
+  font-size: 13px;
+}
+.vditor-find-panel input {
+  padding: 4px 8px; border: 1px solid var(--bdr); border-radius: 6px;
+  font-size: 13px; outline: none; width: 160px;
+  background: var(--white); color: var(--text);
+}
+.vditor-find-panel input:focus { border-color: var(--pri); }
+.vditor-find-panel button {
+  padding: 4px 10px; border: 1px solid var(--bdr); border-radius: 6px;
+  background: var(--white); color: var(--text); cursor: pointer; font-size: 12px;
+  white-space: nowrap;
+}
+.vditor-find-panel button:hover { background: #e2e8f0; }
+.vditor-find-panel .vfp-count { font-size: 12px; color: var(--sub); min-width: 50px; }
+.vditor-find-panel .vfp-close {
+  margin-left: auto; border: none; font-size: 16px; line-height: 1; padding: 2px 6px;
+}
 
 .editor-split {
   --editor-left-width: calc(50% - 5px);
@@ -2161,6 +2186,124 @@ function insertMarkdownToNoteEditor(md) {
   return false;
 }
 
+/* ── Vditor Find/Replace ──────────────────────────────────────────────── */
+function vditorToggleFind(vditorEl) {
+  if (!vditorEl) return;
+  const existing = vditorEl.querySelector('.vditor-find-panel');
+  if (existing) { existing.remove(); return; }
+  const resetEl = vditorEl.querySelector('.vditor-reset');
+  if (!resetEl) return;
+
+  const panel = document.createElement('div');
+  panel.className = 'vditor-find-panel';
+  panel.innerHTML = `
+    <input class="vfp-find" placeholder="查找..." />
+    <span class="vfp-count"></span>
+    <button class="vfp-prev" title="上一个">&#9650;</button>
+    <button class="vfp-next" title="下一个">&#9660;</button>
+    <input class="vfp-replace" placeholder="替换..." />
+    <button class="vfp-rep-one">替换</button>
+    <button class="vfp-rep-all">全部替换</button>
+    <button class="vfp-close" title="关闭">&times;</button>`;
+
+  const toolbar = vditorEl.querySelector('.vditor-toolbar');
+  if (toolbar) toolbar.after(panel); else vditorEl.prepend(panel);
+
+  const findInput = panel.querySelector('.vfp-find');
+  const replaceInput = panel.querySelector('.vfp-replace');
+  const countSpan = panel.querySelector('.vfp-count');
+  let matches = [], cur = -1;
+
+  function clearHL() {
+    resetEl.querySelectorAll('mark[data-vfp]').forEach(m => {
+      const t = document.createTextNode(m.textContent);
+      m.parentNode.replaceChild(t, m);
+    });
+    resetEl.normalize();
+  }
+
+  function doFind() {
+    clearHL(); matches = []; cur = -1;
+    const q = findInput.value;
+    if (!q) { countSpan.textContent = ''; return; }
+    const walker = document.createTreeWalker(resetEl, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) nodes.push(walker.currentNode);
+    const qLow = q.toLowerCase();
+    for (const node of nodes) {
+      let text = node.textContent, idx = 0;
+      const parts = []; let found = false;
+      while (true) {
+        const i = text.toLowerCase().indexOf(qLow, idx);
+        if (i === -1) { parts.push(document.createTextNode(text.slice(idx))); break; }
+        found = true;
+        if (i > idx) parts.push(document.createTextNode(text.slice(idx, i)));
+        const mark = document.createElement('mark');
+        mark.setAttribute('data-vfp', '1');
+        mark.style.cssText = 'background:#fde68a;color:inherit;padding:0;border-radius:2px;';
+        mark.textContent = text.slice(i, i + q.length);
+        parts.push(mark);
+        matches.push(mark);
+        idx = i + q.length;
+      }
+      if (found) { const frag = document.createDocumentFragment(); parts.forEach(p => frag.appendChild(p)); node.parentNode.replaceChild(frag, node); }
+    }
+    countSpan.textContent = matches.length ? `${matches.length} 个结果` : '无结果';
+    if (matches.length) goTo(0);
+  }
+
+  function goTo(i) {
+    if (!matches.length) return;
+    if (matches[cur]) matches[cur].style.background = '#fde68a';
+    cur = ((i % matches.length) + matches.length) % matches.length;
+    matches[cur].style.background = '#f97316';
+    matches[cur].scrollIntoView({ block: 'center', behavior: 'smooth' });
+    countSpan.textContent = `${cur + 1} / ${matches.length}`;
+  }
+
+  function replaceOne() {
+    if (cur < 0 || !matches[cur]) return;
+    const mark = matches[cur];
+    const t = document.createTextNode(replaceInput.value);
+    mark.parentNode.replaceChild(t, mark);
+    matches.splice(cur, 1);
+    if (matches.length) { goTo(cur >= matches.length ? 0 : cur); }
+    else { countSpan.textContent = '无结果'; cur = -1; }
+    syncVditorValue(resetEl);
+  }
+
+  function replaceAll() {
+    const rv = replaceInput.value;
+    matches.forEach(m => { const t = document.createTextNode(rv); m.parentNode.replaceChild(t, m); });
+    matches = []; cur = -1; countSpan.textContent = '已全部替换';
+    resetEl.normalize();
+    syncVditorValue(resetEl);
+  }
+
+  function syncVditorValue(el) {
+    el.normalize();
+    const vd = el.closest('.vditor');
+    if (vd && vd.id) {
+      const inst = { 'note-editor-vditor': noteVditor, 'op-editor-vditor': opVditor, 'arc-desc-vditor': arcDescVditor, 'proj-note-editor-vditor': (typeof projVditor!=='undefined'?projVditor:null) }[vd.id];
+      if (inst && typeof inst.getValue === 'function') {
+        try {
+          const hiddenMap = { 'note-editor-vditor':'note-editor-md', 'op-editor-vditor':'op-editor-md', 'arc-desc-vditor':'arc-content-description', 'proj-note-editor-vditor':'proj-note-editor-md' };
+          const h = hiddenMap[vd.id]; if (h && $(h)) $(h).value = inst.getValue();
+        } catch(e){}
+      }
+    }
+  }
+
+  findInput.addEventListener('input', doFind);
+  findInput.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); goTo(e.shiftKey ? cur - 1 : cur + 1); } });
+  panel.querySelector('.vfp-prev').onclick = () => goTo(cur - 1);
+  panel.querySelector('.vfp-next').onclick = () => goTo(cur + 1);
+  panel.querySelector('.vfp-rep-one').onclick = replaceOne;
+  panel.querySelector('.vfp-rep-all').onclick = replaceAll;
+  panel.querySelector('.vfp-close').onclick = () => { clearHL(); panel.remove(); };
+  findInput.focus();
+}
+
 function ensureNoteVditor() {
   if (noteVditor) {
     toggleNoteEditorMode(true);
@@ -2185,6 +2328,15 @@ function ensureNoteVditor() {
       minHeight: 200,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      toolbar: [
+        "emoji","headings","bold","italic","strike","link","|",
+        "list","ordered-list","check","outdent","indent","|",
+        "quote","line","code","inline-code","insert-before","insert-after","|",
+        "upload","table","|","undo","redo","|",
+        {name:"find",tip:"查找替换",icon:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>',click(e){vditorToggleFind(e.target.closest('.vditor'))}},
+        "fullscreen","edit-mode",
+        {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
+      ],
       preview: {
         math: { engine: 'KaTeX' },
         theme: { current: _dk ? 'dark' : 'light' },
@@ -2234,6 +2386,15 @@ function ensureOpVditor() {
       minHeight: 200,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      toolbar: [
+        "emoji","headings","bold","italic","strike","link","|",
+        "list","ordered-list","check","outdent","indent","|",
+        "quote","line","code","inline-code","insert-before","insert-after","|",
+        "upload","table","|","undo","redo","|",
+        {name:"find",tip:"查找替换",icon:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>',click(e){vditorToggleFind(e.target.closest('.vditor'))}},
+        "fullscreen","edit-mode",
+        {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
+      ],
       preview: {
         math: { engine: 'KaTeX' },
         theme: { current: _dk2 ? 'dark' : 'light' },
@@ -2290,6 +2451,15 @@ function ensureArcDescVditor() {
       minHeight: 150,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      toolbar: [
+        "emoji","headings","bold","italic","strike","link","|",
+        "list","ordered-list","check","outdent","indent","|",
+        "quote","line","code","inline-code","insert-before","insert-after","|",
+        "upload","table","|","undo","redo","|",
+        {name:"find",tip:"查找替换",icon:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>',click(e){vditorToggleFind(e.target.closest('.vditor'))}},
+        "fullscreen","edit-mode",
+        {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
+      ],
       preview: { math: { engine: 'KaTeX' }, theme: { current: _dk3 ? 'dark' : 'light' } },
       input(value) { $('arc-content-description').value = value; },
       after() {
@@ -5541,6 +5711,15 @@ function ensureProjVditor() {
       minHeight: 200,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      toolbar: [
+        "emoji","headings","bold","italic","strike","link","|",
+        "list","ordered-list","check","outdent","indent","|",
+        "quote","line","code","inline-code","insert-before","insert-after","|",
+        "upload","table","|","undo","redo","|",
+        {name:"find",tip:"查找替换",icon:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>',click(e){vditorToggleFind(e.target.closest('.vditor'))}},
+        "fullscreen","edit-mode",
+        {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
+      ],
       preview: { math: { engine: 'KaTeX' }, theme: { current: _dk4 ? 'dark' : 'light' } },
       input(value) { $('proj-note-editor-md').value = value; },
       after() {
