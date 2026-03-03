@@ -1086,6 +1086,73 @@ button {
   font-size: 0.75rem;
   font-weight: 500;
 }
+
+/* ── Project Sub-Banner ──────────────────────────────────────────────── */
+.project-sub-banner {
+  position: fixed;
+  top: var(--nav-h);
+  left: 0; right: 0;
+  height: 44px;
+  background: var(--white);
+  border-bottom: 1px solid var(--bdr);
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  gap: 8px;
+  z-index: 99;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  overflow-x: auto;
+}
+.project-btn-list {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  overflow-x: auto;
+}
+.project-btn {
+  background: none;
+  color: var(--sub);
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 500;
+  border: 1.5px solid transparent;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.project-btn:hover { background: #eef0fd; color: var(--pri); }
+.project-btn.active {
+  background: #eef0fd;
+  color: var(--pri);
+  border-color: #c3cbf7;
+  font-weight: 600;
+}
+.proj-manage-icons {
+  display: none;
+  margin-left: 6px;
+  font-size: 0.72rem;
+  cursor: pointer;
+}
+.project-btn:hover .proj-manage-icons { display: inline; }
+.project-add-btn { white-space: nowrap; font-size: 0.82rem; }
+
+/* ── Project views ────────────────────────────────────────────────────── */
+#view-project-list {
+  padding: calc(var(--nav-h) + 44px + 28px) 24px 28px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+#view-project-form {
+  padding: calc(var(--nav-h) + 44px + 28px) 24px 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+#view-project-detail {
+  padding: calc(var(--nav-h) + 44px + 28px) 24px 28px;
+  max-width: 900px;
+  margin: 0 auto;
+}
 </style>
 </head>
 <body>
@@ -1097,6 +1164,7 @@ button {
     <button class="nav-tab active" id="nav-tab-notes" data-tab="notes">笔记</button>
     <button class="nav-tab" id="nav-tab-opinions" data-tab="opinions">观点库</button>
     <button class="nav-tab" id="nav-tab-archives" data-tab="archives">归档</button>
+    <button class="nav-tab" id="nav-tab-projects" data-tab="projects">项目</button>
   </div>
   <span class="spacer"></span>
   <div class="account-box">
@@ -1105,6 +1173,12 @@ button {
     <button class="btn-ghost" id="btn-logout" style="display:none;">退出登录</button>
   </div>
 </nav>
+
+<!-- ── Project Sub-Banner ─────────────────────────────────────────────── -->
+<div id="project-sub-banner" class="project-sub-banner" style="display:none;">
+  <div class="project-btn-list" id="project-btn-list"></div>
+  <button class="btn-ghost project-add-btn" id="btn-add-project" style="display:none;">+ 新建项目</button>
+</div>
 
 <!-- ── Auth Overlay ────────────────────────────────────────────────────── -->
 <div id="auth-overlay" class="auth-overlay">
@@ -1631,6 +1705,148 @@ button {
   </div>
 </div>
 
+<!-- ── View: Project Note List ─────────────────────────────────────────── -->
+<div id="view-project-list" class="page">
+  <div class="list-header">
+    <h2 id="proj-list-title">项目笔记</h2>
+    <button class="btn-primary" id="btn-add-proj-note">+ 添加笔记</button>
+  </div>
+  <div class="filter-bar">
+    <input type="search" id="proj-filter-search" placeholder="搜索项目笔记..." autocomplete="off">
+    <select id="proj-filter-topic"><option value="">所有主题</option></select>
+    <select id="proj-filter-tag"><option value="">所有标签</option></select>
+    <select id="proj-filter-sort">
+      <option value="updated_desc">最近修改</option>
+      <option value="created_desc">最新创建</option>
+      <option value="created_asc">最早创建</option>
+      <option value="priority_desc">优先级 高→低</option>
+      <option value="priority_asc">优先级 低→高</option>
+    </select>
+  </div>
+  <div id="proj-note-list"></div>
+</div>
+
+<!-- ── View: Project Note Form ─────────────────────────────────────────── -->
+<div id="view-project-form" class="page">
+  <div class="form-header">
+    <button class="btn-ghost" id="btn-back-to-proj-list">← 返回</button>
+    <h2 id="proj-form-title-label">添加笔记</h2>
+  </div>
+  <div class="form-row">
+    <div class="section-label">标题</div>
+    <input type="text" id="proj-note-title" class="full-width" placeholder="输入笔记标题，支持 $LaTeX$ 公式" style="width:100%;">
+    <div id="proj-note-title-preview" class="render-box title-preview-box"><span class="empty-hint">标题实时预览</span></div>
+  </div>
+  <div class="form-row">
+    <div class="section-label">主题 *</div>
+    <div class="topic-selector">
+      <div class="topic-levels" id="proj-topic-levels"></div>
+      <div class="topic-new-row" id="proj-topic-new-row" style="display:none;">
+        <input type="text" id="proj-new-topic-input" placeholder="输入新主题名称，支持多级（如 代数/群论）">
+        <button type="button" class="btn-ghost" id="btn-proj-topic-commit-level">确认并继续下一级</button>
+      </div>
+      <div class="topic-hint" id="proj-topic-current-hint">当前主题：未选择</div>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="section-label">标签</div>
+    <div class="tag-selector" id="proj-tag-selector">
+      <div class="tag-selector-input" id="proj-tag-selector-input">
+        <input type="text" class="tag-input-inner" id="proj-tag-input" placeholder="输入或选择标签...">
+      </div>
+      <div class="tag-dropdown" id="proj-tag-dropdown"></div>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="section-label">优先级</div>
+    <div class="stars-input" id="proj-priority-stars">
+      <button type="button" class="star-btn" data-val="1">★</button>
+      <button type="button" class="star-btn" data-val="2">★</button>
+      <button type="button" class="star-btn" data-val="3">★</button>
+      <button type="button" class="star-btn" data-val="4">★</button>
+      <button type="button" class="star-btn" data-val="5">★</button>
+    </div>
+  </div>
+  <div class="form-row">
+    <div class="section-label">正文</div>
+    <div class="editor-toolbar">
+      <button type="button" id="btn-proj-upload-img">📷 插入图片</button>
+      <input type="file" id="proj-img-file-input" accept="image/*" style="display:none;">
+      <span class="hint">支持 Ctrl+V / Cmd+V 粘贴图片</span>
+    </div>
+    <div id="proj-note-editor-vditor-shell" class="vditor-shell">
+      <div id="proj-note-editor-vditor"></div>
+    </div>
+    <div class="editor-split" id="proj-editor-split" style="display:none;">
+      <div class="editor-col">
+        <div class="section-label">Markdown 编辑</div>
+        <textarea id="proj-note-editor-md" placeholder="在此输入笔记内容..."></textarea>
+      </div>
+      <div class="editor-col">
+        <div class="section-label">实时预览</div>
+        <div id="proj-note-preview" class="render-box"></div>
+      </div>
+    </div>
+  </div>
+  <div class="form-actions">
+    <button class="btn-primary" id="btn-save-proj-note">保存笔记</button>
+    <button class="btn-ghost" id="btn-save-proj-note-and-open" type="button">保存并跳转</button>
+    <span id="proj-form-msg"></span>
+  </div>
+</div>
+
+<!-- ── View: Project Note Detail ───────────────────────────────────────── -->
+<div id="view-project-detail" class="page">
+  <div class="detail-back">
+    <button class="btn-ghost" id="btn-back-from-proj-detail">← 返回列表</button>
+  </div>
+  <div class="detail-header">
+    <div class="detail-title" id="proj-detail-title"></div>
+    <div class="detail-meta" id="proj-detail-meta"></div>
+  </div>
+  <div class="detail-actions" style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn-primary" id="btn-edit-proj-note">编辑</button>
+    <button class="btn-danger" id="btn-delete-proj-note">删除</button>
+  </div>
+  <div class="detail-body render-box" id="proj-detail-body"></div>
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>评论</h3>
+      <button class="cq-add-btn" id="btn-add-proj-comment">+ 添加评论</button>
+    </div>
+    <div id="proj-comment-input-area"></div>
+    <div id="proj-comment-list"></div>
+  </div>
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>问题</h3>
+      <button class="cq-add-btn" id="btn-add-proj-question">+ 添加问题</button>
+    </div>
+    <div id="proj-question-input-area"></div>
+    <div id="proj-question-list"></div>
+  </div>
+</div>
+
+<!-- ── Project Create/Edit Modal ───────────────────────────────────────── -->
+<div id="project-modal-overlay" class="auth-overlay" style="display:none;">
+  <div class="auth-card" style="max-width:480px;">
+    <h3 id="project-modal-title">新建项目</h3>
+    <div class="auth-row">
+      <label for="project-name-input">项目名称</label>
+      <input id="project-name-input" type="text" placeholder="请输入项目名称">
+    </div>
+    <div class="auth-row">
+      <label>成员权限（选择可以看到此项目的用户）</label>
+      <div id="project-members-list"></div>
+    </div>
+    <div class="auth-actions" style="margin-top:16px;gap:8px;">
+      <button class="btn-primary" id="btn-project-modal-save">保存</button>
+      <button class="btn-ghost" id="btn-project-modal-cancel">取消</button>
+    </div>
+    <div id="project-modal-msg"></div>
+  </div>
+</div>
+
 <!-- ── Floating KaTeX Preview ──────────────────────────────────────────── -->
 <div id="float-preview">
   <div id="fp-header">
@@ -1709,6 +1925,21 @@ let arcDescVditorInitStarted = false;
 let arcDescVditorPendingValue = '';
 let arcTopicFormState = { segments: [], pendingNewDepth: null };
 let arcPendingDocs = []; // docs uploaded during creation before save
+
+// Projects state
+let allProjects = [];
+let currentProjectId = null;
+let projectNotes = [];
+let projectTopics = [];
+let editingProjNoteId = null;
+let viewingProjNoteId = null;
+let projSelectedTags = [];
+let projCurrentPriority = 0;
+let projTopicFormState = { segments: [], pendingNewDepth: null };
+let projVditor = null;
+let projVditorInitStarted = false;
+let projVditorPendingValue = '';
+let editingProjectId = null; // null = create, string = rename
 
 /* ════════════════════════════════════════════════════════════════════════
    Utilities
@@ -1793,7 +2024,8 @@ function ensureNoteVditor() {
   try {
     noteVditor = new Vditor('note-editor-vditor', {
       mode: 'wysiwyg',
-      height: 400,
+      height: 'auto',
+      minHeight: 200,
       cdn: '/vendor/vditor',
       cache: { enable: false },
       preview: {
@@ -1838,7 +2070,8 @@ function ensureOpVditor() {
   try {
     opVditor = new Vditor('op-editor-vditor', {
       mode: 'wysiwyg',
-      height: 400,
+      height: 'auto',
+      minHeight: 200,
       cdn: '/vendor/vditor',
       cache: { enable: false },
       preview: {
@@ -1890,7 +2123,8 @@ function ensureArcDescVditor() {
   try {
     arcDescVditor = new Vditor('arc-desc-vditor', {
       mode: 'wysiwyg',
-      height: 200,
+      height: 'auto',
+      minHeight: 150,
       cdn: '/vendor/vditor',
       cache: { enable: false },
       preview: { math: { engine: 'KaTeX' } },
@@ -2185,10 +2419,12 @@ function setLoggedInUI(loggedIn) {
     $('nav-tab-notes').style.display = perms.includes('notes') ? '' : 'none';
     $('nav-tab-opinions').style.display = perms.includes('opinions') ? '' : 'none';
     $('nav-tab-archives').style.display = perms.includes('archives') ? '' : 'none';
+    $('nav-tab-projects').style.display = perms.includes('projects') ? '' : 'none';
     $('btn-permissions').style.display = isAdmin ? '' : 'none';
   } else {
     navTabs.style.display = 'none';
     $('btn-permissions').style.display = 'none';
+    showProjectSubBanner(false);
   }
 }
 
@@ -2249,6 +2485,8 @@ function loginNavigate() {
     switchToSection('opinions');
   } else if (perms.includes('archives')) {
     switchToSection('archives');
+  } else if (perms.includes('projects')) {
+    switchToSection('projects');
   }
 }
 
@@ -2289,14 +2527,22 @@ function showView(name) {
   $('view-archives-list').classList.toggle('active', name === 'archives-list');
   $('view-archives-form').classList.toggle('active', name === 'archives-form');
   $('view-archives-detail').classList.toggle('active', name === 'archives-detail');
+  $('view-project-list').classList.toggle('active', name === 'project-list');
+  $('view-project-form').classList.toggle('active', name === 'project-form');
+  $('view-project-detail').classList.toggle('active', name === 'project-detail');
   if (name === 'form') ensureNoteVditor();
   if (name === 'opinions-form') ensureOpVditor();
   if (name === 'archives-form') ensureArcDescVditor();
+  if (name === 'project-form') ensureProjVditor();
   window.scrollTo(0, 0);
 }
 
 function switchToSection(section) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === section));
+  // Hide project sub-banner when not on projects
+  if (section !== 'projects') {
+    showProjectSubBanner(false);
+  }
   if (section === 'notes') {
     loadNoteTopics();
     showView('list');
@@ -2304,6 +2550,9 @@ function switchToSection(section) {
     loadArchiveTopics();
     loadArchives();
     showView('archives-list');
+  } else if (section === 'projects') {
+    showProjectSubBanner(true);
+    loadProjects();
   } else {
     loadOpinionTopics();
     loadOpinions();
@@ -2755,6 +3004,15 @@ function fillTagFilter() {
 
   // Archive filter
   populateArcFilters();
+
+  // Project filter
+  const pSel = $('proj-filter-tag');
+  const pVal = pSel.value;
+  pSel.innerHTML = '<option value="">所有标签</option>';
+  allTags.forEach(t => {
+    pSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</option>';
+  });
+  pSel.value = pVal;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -4136,14 +4394,14 @@ async function openPermissionsModal() {
   const res = await apiFetch('/api/permissions');
   if (!res.ok) return;
   const users = await res.json();
-  const sectionLabels = { notes: '笔记', opinions: '观点库', archives: '归档' };
+  const sectionLabels = { notes: '笔记', opinions: '观点库', archives: '归档', projects: '项目' };
   let html = '';
   for (const u of users) {
     html += `<div class="perm-user-row" data-username="${escapeHtml(u.username)}">
       <span class="perm-username">${escapeHtml(u.username)}</span>
       <span class="perm-role-badge">${u.role}</span>
       <div class="perm-checks">`;
-    for (const sec of ['notes', 'opinions', 'archives']) {
+    for (const sec of ['notes', 'opinions', 'archives', 'projects']) {
       const checked = u.permissions.includes(sec) ? 'checked' : '';
       html += `<label><input type="checkbox" data-section="${sec}" ${checked}> ${sectionLabels[sec]}</label>`;
     }
@@ -4733,6 +4991,678 @@ async function uploadArcDoc(file, aid) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   Project Functions
+   ════════════════════════════════════════════════════════════════════════ */
+
+function showProjectSubBanner(visible) {
+  $('project-sub-banner').style.display = visible ? 'flex' : 'none';
+  $('btn-add-project').style.display = (visible && authState.role === 'admin') ? '' : 'none';
+}
+
+async function loadProjects() {
+  try {
+    const res = await apiFetch('/api/projects');
+    if (!res.ok) return;
+    allProjects = await res.json();
+    renderProjectButtons();
+  } catch(e) {}
+}
+
+function renderProjectButtons() {
+  const container = $('project-btn-list');
+  const isAdmin = authState.role === 'admin';
+  container.innerHTML = allProjects.map(p => {
+    const active = currentProjectId === p.id ? ' active' : '';
+    const manageIcons = isAdmin
+      ? `<span class="proj-manage-icons"><span class="proj-rename-btn" data-id="${p.id}" title="重命名">&#9998;</span> <span class="proj-delete-btn" data-id="${p.id}" title="删除">&#10005;</span></span>`
+      : '';
+    return `<button class="project-btn${active}" data-project-id="${p.id}">${escapeHtml(p.name)}${manageIcons}</button>`;
+  }).join('');
+
+  container.querySelectorAll('.project-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      if (e.target.closest('.proj-rename-btn') || e.target.closest('.proj-delete-btn')) return;
+      switchToProject(btn.dataset.projectId);
+    });
+  });
+  container.querySelectorAll('.proj-rename-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); openProjectModal(btn.dataset.id); });
+  });
+  container.querySelectorAll('.proj-delete-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => { e.stopPropagation(); deleteProject(btn.dataset.id); });
+  });
+
+  if (currentProjectId && !allProjects.find(p => p.id === currentProjectId)) {
+    currentProjectId = null;
+  }
+  if (!currentProjectId && allProjects.length > 0) {
+    switchToProject(allProjects[0].id);
+  } else if (currentProjectId) {
+    switchToProject(currentProjectId);
+  } else {
+    $('proj-note-list').innerHTML = '<div class="empty-hint">暂无项目，点击 "+ 新建项目" 开始</div>';
+    showView('project-list');
+  }
+}
+
+function switchToProject(projectId) {
+  currentProjectId = projectId;
+  document.querySelectorAll('.project-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.projectId === projectId);
+  });
+  const project = allProjects.find(p => p.id === projectId);
+  $('proj-list-title').textContent = project ? project.name : '项目笔记';
+  loadProjectNotes();
+  loadProjectTopics();
+  showView('project-list');
+}
+
+// ── Project Create/Edit Modal ──
+
+function openProjectModal(projectId) {
+  editingProjectId = projectId || null;
+  $('project-modal-overlay').style.display = 'flex';
+  $('project-modal-title').textContent = projectId ? '编辑项目' : '新建项目';
+  if (projectId) {
+    const project = allProjects.find(p => p.id === projectId);
+    $('project-name-input').value = project ? project.name : '';
+  } else {
+    $('project-name-input').value = '';
+  }
+  loadProjectMemberCheckboxes(projectId);
+}
+
+async function loadProjectMemberCheckboxes(projectId) {
+  const res = await apiFetch('/api/permissions');
+  if (!res.ok) return;
+  const users = await res.json();
+  let members = [];
+  if (projectId) {
+    const project = allProjects.find(p => p.id === projectId);
+    if (project) members = project.members || [];
+  }
+  const container = $('project-members-list');
+  container.innerHTML = users
+    .filter(u => u.role !== 'admin')
+    .map(u => {
+      const checked = members.includes(u.username) ? 'checked' : '';
+      return `<label style="display:block;margin:4px 0;"><input type="checkbox" data-username="${escapeHtml(u.username)}" ${checked}> ${escapeHtml(u.username)}</label>`;
+    }).join('');
+}
+
+async function saveProject() {
+  const name = $('project-name-input').value.trim();
+  if (!name) { showMsg('project-modal-msg', '请输入项目名称', 'err'); return; }
+  const members = [];
+  $('project-members-list').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    if (cb.checked) members.push(cb.dataset.username);
+  });
+  const url = editingProjectId ? '/api/projects/' + editingProjectId : '/api/projects';
+  const method = editingProjectId ? 'PUT' : 'POST';
+  try {
+    const res = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, members }),
+    });
+    if (!res.ok) {
+      const data = await res.json();
+      showMsg('project-modal-msg', data.error || '保存失败', 'err');
+      return;
+    }
+    const data = await res.json();
+    $('project-modal-overlay').style.display = 'none';
+    if (!editingProjectId && data.project) {
+      currentProjectId = data.project.id;
+    }
+    await loadProjects();
+  } catch(e) { showMsg('project-modal-msg', '网络错误', 'err'); }
+}
+
+async function deleteProject(projectId) {
+  const project = allProjects.find(p => p.id === projectId);
+  const name = project ? project.name : '';
+  if (!confirm(`确定要删除项目「${name}」吗？此操作会删除项目内的所有笔记、评论和问题，不可撤销。`)) return;
+  const res = await apiFetch('/api/projects/' + projectId, { method: 'DELETE' });
+  if (!res.ok) { alert('删除项目失败'); return; }
+  if (currentProjectId === projectId) currentProjectId = null;
+  await loadProjects();
+}
+
+// ── Project Topics ──
+
+async function loadProjectTopics() {
+  if (!currentProjectId) return;
+  try {
+    const res = await apiFetch('/api/projects/' + currentProjectId + '/topics?source=notes');
+    if (!res.ok) return;
+    projectTopics = await res.json();
+    fillProjectTopicFilter();
+  } catch(e) {}
+}
+
+function fillProjectTopicFilter() {
+  const fSel = $('proj-filter-topic');
+  const fVal = fSel.value;
+  fSel.innerHTML = '<option value="">所有主题</option>';
+  projectTopics.forEach(t => {
+    fSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(formatTopicLabel(t.name)) + '</option>';
+  });
+  fSel.value = fVal;
+}
+
+function buildProjectTopicIndex() {
+  const childrenByPrefix = new Map();
+  const pathRawByNorm = new Map();
+  function addChild(prefix, child) {
+    if (!childrenByPrefix.has(prefix)) childrenByPrefix.set(prefix, new Set());
+    childrenByPrefix.get(prefix).add(child);
+  }
+  (projectTopics || []).forEach(t => {
+    const raw = String((t && t.name) || '').trim();
+    const parts = splitTopicPath(raw);
+    if (!parts.length) return;
+    const norm = joinTopicPath(parts);
+    if (!pathRawByNorm.has(norm)) pathRawByNorm.set(norm, raw);
+    for (let i = 0; i < parts.length; i++) {
+      const prefix = joinTopicPath(parts.slice(0, i));
+      addChild(prefix, parts[i]);
+    }
+  });
+  return { childrenByPrefix, pathRawByNorm };
+}
+
+function renderProjTopicFormSelector() {
+  const container = $('proj-topic-levels');
+  if (!container) return;
+  const index = buildProjectTopicIndex();
+  container.innerHTML = '';
+  const state = projTopicFormState;
+
+  for (let depth = 0; depth <= state.segments.length; depth++) {
+    const prefix = joinTopicPath(state.segments.slice(0, depth));
+    const childSet = index.childrenByPrefix.get(prefix);
+    const children = childSet ? Array.from(childSet).sort() : [];
+    if (depth < state.segments.length) {
+      const sel = document.createElement('select');
+      sel.dataset.topicDepth = depth;
+      sel.dataset.mode = 'proj';
+      sel.innerHTML = '<option value="">-- 选择 --</option>';
+      children.forEach(c => {
+        sel.innerHTML += `<option value="${escapeHtml(c)}" ${c === state.segments[depth] ? 'selected' : ''}>${escapeHtml(c)}</option>`;
+      });
+      sel.innerHTML += `<option value="${TOPIC_NEW_MARKER}">+ 新建</option>`;
+      container.appendChild(sel);
+    } else {
+      if (state.pendingNewDepth === depth) break;
+      if (children.length > 0 || depth === 0) {
+        const sel = document.createElement('select');
+        sel.dataset.topicDepth = depth;
+        sel.dataset.mode = 'proj';
+        sel.innerHTML = '<option value="">-- 选择 --</option>';
+        children.forEach(c => {
+          sel.innerHTML += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+        });
+        sel.innerHTML += `<option value="${TOPIC_NEW_MARKER}">+ 新建</option>`;
+        container.appendChild(sel);
+      }
+    }
+  }
+
+  if (state.pendingNewDepth != null) {
+    $('proj-topic-new-row').style.display = '';
+    $('proj-new-topic-input').value = '';
+    setTimeout(() => $('proj-new-topic-input').focus(), 50);
+  } else {
+    $('proj-topic-new-row').style.display = 'none';
+  }
+  updateProjTopicHint();
+}
+
+function handleProjTopicLevelChange(depth, value) {
+  const state = projTopicFormState;
+  if (value === TOPIC_NEW_MARKER) {
+    state.segments = state.segments.slice(0, depth);
+    state.pendingNewDepth = depth;
+  } else if (value === '') {
+    state.segments = state.segments.slice(0, depth);
+    state.pendingNewDepth = null;
+  } else {
+    state.segments = state.segments.slice(0, depth);
+    state.segments.push(value);
+    state.pendingNewDepth = null;
+  }
+  renderProjTopicFormSelector();
+}
+
+function commitProjPendingTopic() {
+  const raw = $('proj-new-topic-input').value.trim();
+  if (!raw) return false;
+  const state = projTopicFormState;
+  const parts = splitTopicPath(raw);
+  state.segments = state.segments.slice(0, state.pendingNewDepth).concat(parts);
+  state.pendingNewDepth = null;
+  renderProjTopicFormSelector();
+  return true;
+}
+
+function getProjTopicValueFromForm() {
+  const state = projTopicFormState;
+  if (!state.segments.length) return '';
+  return joinTopicPath(state.segments);
+}
+
+function updateProjTopicHint() {
+  const val = getProjTopicValueFromForm();
+  $('proj-topic-current-hint').textContent = val ? '当前主题：' + formatTopicLabel(val) : '当前主题：未选择';
+}
+
+// ── Project Tag Selector ──
+
+function renderProjTagBadges() {
+  const container = $('proj-tag-selector-input');
+  container.querySelectorAll('.tag-badge').forEach(b => b.remove());
+  const input = $('proj-tag-input');
+  projSelectedTags.forEach(tag => {
+    const badge = document.createElement('span');
+    badge.className = 'tag-badge';
+    badge.innerHTML = escapeHtml(tag) + ' <span class="tag-remove">&times;</span>';
+    badge.querySelector('.tag-remove').addEventListener('click', () => removeProjTag(tag));
+    container.insertBefore(badge, input);
+  });
+}
+
+function addProjTag(tag) {
+  tag = tag.trim();
+  if (!tag || projSelectedTags.includes(tag)) return;
+  projSelectedTags.push(tag);
+  $('proj-tag-input').value = '';
+  renderProjTagBadges();
+  $('proj-tag-dropdown').classList.remove('open');
+}
+
+function removeProjTag(tag) {
+  projSelectedTags = projSelectedTags.filter(t => t !== tag);
+  renderProjTagBadges();
+}
+
+function updateProjTagDropdown() {
+  const q = $('proj-tag-input').value.trim().toLowerCase();
+  const dropdown = $('proj-tag-dropdown');
+  const filtered = allTags.filter(t => !projSelectedTags.includes(t) && t.toLowerCase().includes(q));
+  if (filtered.length === 0 && !q) { dropdown.classList.remove('open'); return; }
+  dropdown.innerHTML = filtered.map(t =>
+    `<div class="tag-dropdown-item">${escapeHtml(t)}</div>`
+  ).join('');
+  if (q && !filtered.includes(q) && !projSelectedTags.includes(q)) {
+    dropdown.innerHTML += `<div class="tag-dropdown-item tag-new">+ 创建 "${escapeHtml(q)}"</div>`;
+  }
+  dropdown.querySelectorAll('.tag-dropdown-item').forEach(item => {
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const text = item.classList.contains('tag-new') ? q : item.textContent;
+      addProjTag(text);
+    });
+  });
+  dropdown.classList.add('open');
+}
+
+// ── Project Notes ──
+
+async function loadProjectNotes() {
+  if (!currentProjectId) return;
+  try {
+    const topic = $('proj-filter-topic').value;
+    const tag = $('proj-filter-tag').value;
+    const sort = $('proj-filter-sort').value;
+    const q = $('proj-filter-search').value.trim();
+    const params = new URLSearchParams();
+    if (topic) params.set('topic', topic);
+    if (tag) params.set('tag', tag);
+    if (sort) params.set('sort', sort);
+    if (q) params.set('q', q);
+    const res = await apiFetch('/api/projects/' + currentProjectId + '/notes?' + params);
+    if (!res.ok) return;
+    projectNotes = await res.json();
+    renderProjectNoteList();
+  } catch(e) {}
+}
+
+function renderProjectNoteList() {
+  const container = $('proj-note-list');
+  if (projectNotes.length === 0) {
+    container.innerHTML = '<div class="empty-hint">暂无笔记，点击 "+ 添加笔记" 开始记录</div>';
+    return;
+  }
+  container.innerHTML = projectNotes.map(note => {
+    const tagsHtml = (note.tags || []).map(t =>
+      '<span class="badge-tag">' + escapeHtml(t) + '</span>'
+    ).join('');
+    return '<div class="note-card" data-id="' + note.id + '">' +
+      '<div class="note-card-title" data-katex>' + escapeHtml(note.title || '(无标题)') + '</div>' +
+      '<div class="note-card-meta">' +
+        '<span class="badge-topic">' + escapeHtml(formatTopicLabel(note.topic)) + '</span>' +
+        tagsHtml +
+        renderStars(note.priority) +
+        '<span>创建: ' + formatTime(note.created_at) + '</span>' +
+        '<span>修改: ' + formatTime(note.updated_at) + '</span>' +
+      '</div>' +
+    '</div>';
+  }).join('');
+  container.querySelectorAll('[data-katex]').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  container.querySelectorAll('.note-card').forEach(card => {
+    card.addEventListener('click', () => openProjectNoteDetail(card.dataset.id));
+  });
+}
+
+// ── Project Note Form ──
+
+function ensureProjVditor() {
+  const shell = $('proj-note-editor-vditor-shell');
+  if (projVditor) {
+    if (shell) shell.classList.add('active');
+    if (typeof projVditor.resize === 'function') {
+      setTimeout(() => { try { projVditor.resize(); } catch (e) {} }, 0);
+    }
+    return;
+  }
+  if (projVditorInitStarted) return;
+  if (typeof window.Vditor !== 'function') return;
+  projVditorInitStarted = true;
+  try {
+    projVditor = new Vditor('proj-note-editor-vditor', {
+      mode: 'wysiwyg',
+      height: 'auto',
+      minHeight: 200,
+      cdn: '/vendor/vditor',
+      cache: { enable: false },
+      preview: { math: { engine: 'KaTeX' } },
+      input(value) { $('proj-note-editor-md').value = value; },
+      after() {
+        if (shell) shell.classList.add('active');
+        try {
+          projVditor.setValue(projVditorPendingValue || $('proj-note-editor-md').value || '');
+        } catch (e) {}
+      },
+    });
+  } catch (e) {
+    projVditor = null;
+    projVditorInitStarted = false;
+    console.error('Project Vditor 初始化失败:', e);
+  }
+}
+
+function setProjEditorValue(text) {
+  text = String(text || '');
+  projVditorPendingValue = text;
+  $('proj-note-editor-md').value = text;
+  if (projVditor && typeof projVditor.setValue === 'function') {
+    try { projVditor.setValue(text); } catch (e) {}
+  }
+}
+
+function openProjCreateForm() {
+  if (!currentProjectId) return;
+  editingProjNoteId = null;
+  $('proj-form-title-label').textContent = '添加笔记';
+  $('proj-note-title').value = '';
+  projSelectedTags = [];
+  renderProjTagBadges();
+  projCurrentPriority = 0;
+  updateProjStars();
+  projTopicFormState = { segments: [], pendingNewDepth: null };
+  renderProjTopicFormSelector();
+  setProjEditorValue('');
+  showView('project-form');
+}
+
+async function openProjEditForm(noteId) {
+  if (!currentProjectId) return;
+  const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + noteId);
+  if (!res.ok) return;
+  const note = await res.json();
+  editingProjNoteId = noteId;
+  $('proj-form-title-label').textContent = '编辑笔记';
+  $('proj-note-title').value = note.title;
+  projSelectedTags = note.tags || [];
+  renderProjTagBadges();
+  projCurrentPriority = note.priority || 0;
+  updateProjStars();
+  const parts = splitTopicPath(note.topic || '');
+  projTopicFormState = { segments: parts, pendingNewDepth: null };
+  renderProjTopicFormSelector();
+  setProjEditorValue(note.content || '');
+  showView('project-form');
+}
+
+function updateProjStars() {
+  $('proj-priority-stars').querySelectorAll('.star-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.val) <= projCurrentPriority);
+  });
+}
+
+async function saveProjNote(options = {}) {
+  if (!currentProjectId) return;
+  const title = $('proj-note-title').value.trim();
+  const topic = getProjTopicValueFromForm();
+  if (!topic) { showMsg('proj-form-msg', '请选择主题', 'err'); return; }
+  let content = '';
+  if (projVditor && typeof projVditor.getValue === 'function') {
+    try { content = projVditor.getValue(); } catch (e) {}
+  } else { content = $('proj-note-editor-md').value; }
+  const tags = projSelectedTags;
+  const priority = projCurrentPriority;
+  const method = editingProjNoteId ? 'PUT' : 'POST';
+  const url = editingProjNoteId
+    ? '/api/projects/' + currentProjectId + '/notes/' + editingProjNoteId
+    : '/api/projects/' + currentProjectId + '/notes';
+  try {
+    const res = await apiFetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title, topic, content, tags, priority }),
+    });
+    if (!res.ok) {
+      const d = await res.json();
+      showMsg('proj-form-msg', d.error || '保存失败', 'err');
+      return;
+    }
+    const saved = await res.json();
+    showMsg('proj-form-msg', '保存成功！', 'ok');
+    await loadProjectTopics();
+    await loadTags();
+    if (options.navigateAfterSave) {
+      openProjectNoteDetail(saved.id);
+    }
+  } catch(e) { showMsg('proj-form-msg', '网络错误', 'err'); }
+}
+
+// ── Project Note Detail ──
+
+async function openProjectNoteDetail(noteId) {
+  if (!currentProjectId) return;
+  const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + noteId);
+  if (!res.ok) return;
+  const note = await res.json();
+  viewingProjNoteId = noteId;
+
+  const titleEl = $('proj-detail-title');
+  titleEl.textContent = note.title || '(无标题)';
+  renderMathInElement(titleEl, KATEX_OPTS);
+
+  const tagsHtml = (note.tags || []).map(t => '<span class="badge-tag">' + escapeHtml(t) + '</span>').join('');
+  $('proj-detail-meta').innerHTML =
+    '<span class="badge-topic">' + escapeHtml(formatTopicLabel(note.topic)) + '</span>' +
+    tagsHtml +
+    renderStars(note.priority) +
+    '<span>创建: ' + formatTime(note.created_at) + '</span>' +
+    '<span>修改: ' + formatTime(note.updated_at) + '</span>';
+
+  renderMarkdownKatex(note.content || '', $('proj-detail-body'));
+  loadProjComments(noteId);
+  loadProjQuestions(noteId);
+  showView('project-detail');
+}
+
+// ── Project Comments ──
+
+async function loadProjComments(noteId) {
+  if (!currentProjectId) return;
+  const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + noteId + '/comments');
+  if (!res.ok) return;
+  const comments = await res.json();
+  renderProjComments(comments, noteId);
+}
+
+function renderProjComments(comments, noteId) {
+  const container = $('proj-comment-list');
+  if (!comments.length) { container.innerHTML = '<div class="empty-hint">暂无评论</div>'; return; }
+  const topLevel = comments.filter(c => !c.parent_id);
+  const byParent = {};
+  comments.forEach(c => {
+    if (c.parent_id) {
+      if (!byParent[c.parent_id]) byParent[c.parent_id] = [];
+      byParent[c.parent_id].push(c);
+    }
+  });
+  let html = '';
+  for (const c of topLevel) {
+    html += renderProjCQItem(c, 'comment', noteId, byParent);
+  }
+  container.innerHTML = html;
+  container.querySelectorAll('[data-katex]').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  container.querySelectorAll('.cq-reply-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parentId = btn.dataset.parentId;
+      const area = btn.closest('.cq-item').querySelector('.cq-reply-area');
+      if (area.querySelector('.cq-input-box')) return;
+      createCQInputBox({
+        container: area,
+        placeholder: '输入回复...',
+        submitLabel: '提交回复',
+        isReply: true,
+        onSubmit: async (text) => {
+          await apiFetch('/api/projects/' + currentProjectId + '/notes/' + noteId + '/comments', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text, parent_id: parentId }),
+          });
+          loadProjComments(noteId);
+        },
+      });
+    });
+  });
+  container.querySelectorAll('.cq-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('删除此评论？')) return;
+      await apiFetch('/api/project-comments/' + btn.dataset.id, { method: 'DELETE' });
+      loadProjComments(noteId);
+    });
+  });
+}
+
+function renderProjCQItem(item, type, noteId, byParent) {
+  const icon = type === 'comment' ? '&#128172;' : (item.resolved ? '&#9989;' : '&#10067;');
+  const replies = byParent[item.id] || [];
+  let actionsHtml = `<span class="cq-reply-btn" data-parent-id="${item.id}" style="cursor:pointer;font-size:0.8rem;color:var(--pri);">回复</span>`;
+  if (type === 'question') {
+    const label = item.resolved ? '改为未解决' : '已解决';
+    actionsHtml += ` <span class="cq-resolve-btn" data-id="${item.id}" style="cursor:pointer;font-size:0.8rem;color:var(--pri);">${label}</span>`;
+  }
+  actionsHtml += ` <span class="cq-delete-btn" data-id="${item.id}" style="cursor:pointer;font-size:0.8rem;color:#e53e3e;">删除</span>`;
+  let html = `<div class="cq-item"><div class="cq-icon">${icon}</div><div class="cq-body">`;
+  html += `<div class="cq-meta">${item.created_by ? escapeHtml(item.created_by) + ' · ' : ''}${formatTime(item.created_at)}</div>`;
+  html += `<div class="cq-content" data-katex>${escapeHtml(item.content)}</div>`;
+  html += `<div class="cq-actions">${actionsHtml}</div>`;
+  html += `<div class="cq-reply-area"></div>`;
+  for (const r of replies) {
+    html += `<div class="cq-item is-reply"><div class="cq-icon">${icon}</div><div class="cq-body">`;
+    html += `<div class="cq-meta">${r.created_by ? escapeHtml(r.created_by) + ' · ' : ''}${formatTime(r.created_at)}</div>`;
+    html += `<div class="cq-content" data-katex>${escapeHtml(r.content)}</div>`;
+    html += `<div class="cq-actions"><span class="cq-delete-btn" data-id="${r.id}" style="cursor:pointer;font-size:0.8rem;color:#e53e3e;">删除</span></div>`;
+    html += `</div></div>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+// ── Project Questions ──
+
+async function loadProjQuestions(noteId) {
+  if (!currentProjectId) return;
+  const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + noteId + '/questions');
+  if (!res.ok) return;
+  const questions = await res.json();
+  renderProjQuestions(questions, noteId);
+}
+
+function renderProjQuestions(questions, noteId) {
+  const container = $('proj-question-list');
+  if (!questions.length) { container.innerHTML = '<div class="empty-hint">暂无问题</div>'; return; }
+  const topLevel = questions.filter(q => !q.parent_id);
+  const byParent = {};
+  questions.forEach(q => {
+    if (q.parent_id) {
+      if (!byParent[q.parent_id]) byParent[q.parent_id] = [];
+      byParent[q.parent_id].push(q);
+    }
+  });
+  let html = '';
+  for (const q of topLevel) {
+    html += renderProjCQItem(q, 'question', noteId, byParent);
+  }
+  container.innerHTML = html;
+  container.querySelectorAll('[data-katex]').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  container.querySelectorAll('.cq-reply-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const parentId = btn.dataset.parentId;
+      const area = btn.closest('.cq-item').querySelector('.cq-reply-area');
+      if (area.querySelector('.cq-input-box')) return;
+      createCQInputBox({
+        container: area,
+        placeholder: '输入回复...',
+        submitLabel: '提交回复',
+        isReply: true,
+        onSubmit: async (text) => {
+          await apiFetch('/api/projects/' + currentProjectId + '/notes/' + noteId + '/questions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text, parent_id: parentId }),
+          });
+          loadProjQuestions(noteId);
+        },
+      });
+    });
+  });
+  container.querySelectorAll('.cq-resolve-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      await apiFetch('/api/project-questions/' + btn.dataset.id + '/toggle-resolved', { method: 'POST' });
+      loadProjQuestions(noteId);
+    });
+  });
+  container.querySelectorAll('.cq-delete-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm('删除此问题？')) return;
+      await apiFetch('/api/project-questions/' + btn.dataset.id, { method: 'DELETE' });
+      loadProjQuestions(noteId);
+    });
+  });
+}
+
+// ── Project Image Upload ──
+
+async function projUploadImageAndInsert(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const fd = new FormData();
+  fd.append('image', file);
+  const res = await apiFetch('/api/upload', { method: 'POST', body: fd });
+  if (res.ok) {
+    const d = await res.json();
+    if (projVditor) projVditor.insertValue(`![${file.name}](${d.url})\n`);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    Event Listeners
    ════════════════════════════════════════════════════════════════════════ */
 $('btn-login').addEventListener('click', doLogin);
@@ -5124,6 +6054,140 @@ $('btn-add-arc-question').addEventListener('click', () => {
         body: JSON.stringify({ content: text }),
       });
       loadArcQuestions(viewingArchiveId);
+    },
+  });
+});
+
+// ── Project event listeners ──
+$('btn-add-project').addEventListener('click', () => openProjectModal());
+$('btn-project-modal-save').addEventListener('click', saveProject);
+$('btn-project-modal-cancel').addEventListener('click', () => {
+  $('project-modal-overlay').style.display = 'none';
+});
+
+$('btn-add-proj-note').addEventListener('click', openProjCreateForm);
+$('btn-back-to-proj-list').addEventListener('click', () => { loadProjectNotes(); showView('project-list'); });
+$('btn-back-from-proj-detail').addEventListener('click', () => { loadProjectNotes(); showView('project-list'); });
+
+$('btn-save-proj-note').addEventListener('click', () => saveProjNote({ navigateAfterSave: false }));
+$('btn-save-proj-note-and-open').addEventListener('click', () => saveProjNote({ navigateAfterSave: true }));
+
+$('btn-edit-proj-note').addEventListener('click', () => {
+  if (viewingProjNoteId) openProjEditForm(viewingProjNoteId);
+});
+
+$('btn-delete-proj-note').addEventListener('click', async () => {
+  if (!viewingProjNoteId || !currentProjectId) return;
+  if (!confirm('确定要删除这篇笔记吗？此操作不可撤销。')) return;
+  const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + viewingProjNoteId, { method: 'DELETE' });
+  if (!res.ok) { alert('删除失败'); return; }
+  await loadProjectNotes();
+  showView('project-list');
+});
+
+$('proj-filter-topic').addEventListener('change', loadProjectNotes);
+$('proj-filter-tag').addEventListener('change', loadProjectNotes);
+$('proj-filter-sort').addEventListener('change', loadProjectNotes);
+$('proj-filter-search').addEventListener('input', debounce(loadProjectNotes, 300));
+
+// Project topic selector
+$('proj-topic-levels').addEventListener('change', (e) => {
+  const sel = e.target.closest('select[data-topic-depth]');
+  if (!sel || sel.dataset.mode !== 'proj') return;
+  handleProjTopicLevelChange(parseInt(sel.dataset.topicDepth, 10), sel.value);
+});
+
+$('proj-new-topic-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); commitProjPendingTopic(); }
+});
+$('btn-proj-topic-commit-level').addEventListener('click', () => {
+  if (!commitProjPendingTopic()) showMsg('proj-form-msg', '请输入新主题名称', 'err');
+});
+
+// Project tag selector
+$('proj-tag-input').addEventListener('input', updateProjTagDropdown);
+$('proj-tag-input').addEventListener('focus', updateProjTagDropdown);
+$('proj-tag-input').addEventListener('blur', () => {
+  setTimeout(() => { $('proj-tag-dropdown').classList.remove('open'); }, 200);
+});
+$('proj-tag-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const v = $('proj-tag-input').value.trim();
+    if (v) addProjTag(v);
+  } else if (e.key === 'Backspace' && !$('proj-tag-input').value && projSelectedTags.length > 0) {
+    removeProjTag(projSelectedTags[projSelectedTags.length - 1]);
+  }
+});
+$('proj-tag-selector-input').addEventListener('click', (e) => {
+  const rm = e.target.closest('.tag-chip-remove');
+  if (rm) { removeProjTag(rm.dataset.tag); return; }
+  $('proj-tag-input').focus();
+});
+
+// Project priority stars
+$('proj-priority-stars').addEventListener('click', (e) => {
+  const btn = e.target.closest('.star-btn');
+  if (!btn) return;
+  const val = parseInt(btn.dataset.val);
+  projCurrentPriority = (projCurrentPriority === val) ? 0 : val;
+  updateProjStars();
+});
+
+// Project title live preview
+$('proj-note-title').addEventListener('input', () => {
+  const raw = $('proj-note-title').value;
+  const preview = $('proj-note-title-preview');
+  if (!raw.trim()) {
+    preview.innerHTML = '<span class="empty-hint">标题实时预览</span>';
+    return;
+  }
+  preview.textContent = raw;
+  renderMathInElement(preview, KATEX_OPTS);
+});
+
+// Project image upload
+$('btn-proj-upload-img').addEventListener('click', () => { $('proj-img-file-input').click(); });
+$('proj-img-file-input').addEventListener('change', () => {
+  const file = $('proj-img-file-input').files[0];
+  if (file) projUploadImageAndInsert(file);
+  $('proj-img-file-input').value = '';
+});
+
+// Project comments
+$('btn-add-proj-comment').addEventListener('click', () => {
+  const area = $('proj-comment-input-area');
+  if (area.querySelector('.cq-input-box')) return;
+  createCQInputBox({
+    container: area,
+    placeholder: '输入评论，支持 $LaTeX$ 公式...',
+    submitLabel: '提交评论',
+    onSubmit: async (text) => {
+      await apiFetch('/api/projects/' + currentProjectId + '/notes/' + viewingProjNoteId + '/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadProjComments(viewingProjNoteId);
+    },
+  });
+});
+
+// Project questions
+$('btn-add-proj-question').addEventListener('click', () => {
+  const area = $('proj-question-input-area');
+  if (area.querySelector('.cq-input-box')) return;
+  createCQInputBox({
+    container: area,
+    placeholder: '输入问题，支持 $LaTeX$ 公式...',
+    submitLabel: '提交问题',
+    onSubmit: async (text) => {
+      await apiFetch('/api/projects/' + currentProjectId + '/notes/' + viewingProjNoteId + '/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadProjQuestions(viewingProjNoteId);
     },
   });
 });

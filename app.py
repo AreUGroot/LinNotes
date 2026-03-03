@@ -43,7 +43,7 @@ ROLE_USER = 'user'
 VALID_OP_TYPES = ('事实', '观点', '反驳', '预测', '计划')
 
 # Valid permission sections
-VALID_SECTIONS = ('notes', 'opinions', 'archives')
+VALID_SECTIONS = ('notes', 'opinions', 'archives', 'projects')
 
 # Input length limits
 MAX_TITLE_LENGTH = 500
@@ -241,6 +241,72 @@ def _init_db():
             last_used_at TEXT,
             FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (created_by) REFERENCES users(username) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS project_members (
+            project_id TEXT NOT NULL,
+            username TEXT NOT NULL,
+            PRIMARY KEY (project_id, username),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS project_topics (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            UNIQUE (project_id, name),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS project_notes (
+            id TEXT PRIMARY KEY,
+            project_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            content TEXT NOT NULL DEFAULT '',
+            priority INTEGER DEFAULT 0,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS project_note_tags (
+            note_id TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (note_id, tag_id),
+            FOREIGN KEY (note_id) REFERENCES project_notes(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS project_comments (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            parent_id TEXT,
+            content TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (note_id) REFERENCES project_notes(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS project_questions (
+            id TEXT PRIMARY KEY,
+            note_id TEXT NOT NULL,
+            parent_id TEXT,
+            content TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            resolved INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (note_id) REFERENCES project_notes(id) ON DELETE CASCADE
+        );
     ''')
 
     # Ensure role column exists (for existing databases)
@@ -312,7 +378,7 @@ def _init_db():
             ('Lin', section)
         )
     for uname in ('Qingli', 'TestUser1', 'TestUser2', 'TestUser3'):
-        for section in ('opinions', 'archives'):
+        for section in ('opinions', 'archives', 'projects'):
             db.execute(
                 'INSERT OR IGNORE INTO user_permissions (username, section) VALUES (?, ?)',
                 (uname, section)
@@ -517,6 +583,78 @@ def _archive_rating_to_dict(row):
         'archive_id': row['archive_id'],
         'rating': row['rating'],
         'created_by': row['created_by'],
+        'created_at': row['created_at'],
+    }
+
+
+# ── 项目辅助 ─────────────────────────────────────────────────────────────────
+def _project_note_tags(db, note_id):
+    rows = db.execute(
+        'SELECT t.name FROM tags t JOIN project_note_tags pnt ON pnt.tag_id = t.id WHERE pnt.note_id = ?',
+        (note_id,)
+    ).fetchall()
+    return [r['name'] for r in rows]
+
+
+def _set_project_note_tags(db, note_id, tag_names):
+    db.execute('DELETE FROM project_note_tags WHERE note_id = ?', (note_id,))
+    for name in tag_names:
+        row = db.execute('SELECT id FROM tags WHERE name = ?', (name,)).fetchone()
+        if row:
+            db.execute(
+                'INSERT OR IGNORE INTO project_note_tags (note_id, tag_id) VALUES (?, ?)',
+                (note_id, row['id'])
+            )
+
+
+def _project_note_to_dict(row, tags):
+    return {
+        'id': row['id'],
+        'project_id': row['project_id'],
+        'title': row['title'],
+        'topic': row['topic'],
+        'content': row['content'],
+        'priority': row['priority'],
+        'tags': tags,
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at'],
+    }
+
+
+def _ensure_project_topic(db, project_id, name):
+    db.execute('INSERT OR IGNORE INTO project_topics (project_id, name) VALUES (?, ?)', (project_id, name))
+
+
+def _check_project_member(db, project_id, username):
+    role = _get_user_role(db, username)
+    if role == ROLE_ADMIN:
+        return True
+    row = db.execute(
+        'SELECT 1 FROM project_members WHERE project_id = ? AND username = ?',
+        (project_id, username)
+    ).fetchone()
+    return row is not None
+
+
+def _project_comment_to_dict(row):
+    return {
+        'id': row['id'],
+        'note_id': row['note_id'],
+        'parent_id': row['parent_id'],
+        'content': row['content'],
+        'created_by': row['created_by'],
+        'created_at': row['created_at'],
+    }
+
+
+def _project_question_to_dict(row):
+    return {
+        'id': row['id'],
+        'note_id': row['note_id'],
+        'parent_id': row['parent_id'],
+        'content': row['content'],
+        'created_by': row['created_by'],
+        'resolved': bool(row['resolved']),
         'created_at': row['created_at'],
     }
 
@@ -1967,6 +2105,472 @@ def delete_archive_rating(rid):
         if not row:
             return jsonify({'error': '评分记录不存在'}), 404
         db.execute('DELETE FROM archive_ratings WHERE id = ?', (rid,))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 项目 API ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/projects', methods=['GET'])
+@_require_auth
+@_require_section('projects')
+def list_projects():
+    db = _get_db()
+    role = _get_user_role(db, g.current_user)
+    if role == ROLE_ADMIN:
+        rows = db.execute('SELECT * FROM projects ORDER BY updated_at DESC').fetchall()
+    else:
+        rows = db.execute(
+            'SELECT p.* FROM projects p JOIN project_members pm ON pm.project_id = p.id WHERE pm.username = ? ORDER BY p.updated_at DESC',
+            (g.current_user,)
+        ).fetchall()
+    result = []
+    for r in rows:
+        members = db.execute('SELECT username FROM project_members WHERE project_id = ?', (r['id'],)).fetchall()
+        result.append({
+            'id': r['id'], 'name': r['name'], 'created_by': r['created_by'],
+            'created_at': r['created_at'], 'updated_at': r['updated_at'],
+            'members': [m['username'] for m in members],
+        })
+    return jsonify(result)
+
+
+@app.route('/api/projects', methods=['POST'])
+@_require_auth
+@_require_section('projects')
+def create_project():
+    db = _get_db()
+    role = _get_user_role(db, g.current_user)
+    if role != ROLE_ADMIN:
+        return jsonify({'error': '无权限'}), 403
+    b = request.get_json(force=True) or {}
+    name = str(b.get('name', '')).strip()
+    if not name:
+        return jsonify({'error': '请输入项目名称'}), 400
+    if len(name) > MAX_TITLE_LENGTH:
+        return jsonify({'error': '项目名称过长'}), 400
+    members = b.get('members', [])
+    pid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO projects (id, name, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+            (pid, name, g.current_user, now, now)
+        )
+        for uname in members:
+            db.execute('INSERT OR IGNORE INTO project_members (project_id, username) VALUES (?, ?)', (pid, uname))
+        db.commit()
+    mrows = db.execute('SELECT username FROM project_members WHERE project_id = ?', (pid,)).fetchall()
+    return jsonify({
+        'status': 'ok',
+        'project': {'id': pid, 'name': name, 'created_by': g.current_user,
+                     'created_at': now, 'updated_at': now,
+                     'members': [m['username'] for m in mrows]},
+    })
+
+
+@app.route('/api/projects/<pid>', methods=['GET'])
+@_require_auth
+@_require_section('projects')
+def get_project(pid):
+    db = _get_db()
+    row = db.execute('SELECT * FROM projects WHERE id = ?', (pid,)).fetchone()
+    if not row:
+        return jsonify({'error': '项目不存在'}), 404
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    members = db.execute('SELECT username FROM project_members WHERE project_id = ?', (pid,)).fetchall()
+    return jsonify({
+        'id': row['id'], 'name': row['name'], 'created_by': row['created_by'],
+        'created_at': row['created_at'], 'updated_at': row['updated_at'],
+        'members': [m['username'] for m in members],
+    })
+
+
+@app.route('/api/projects/<pid>', methods=['PUT'])
+@_require_auth
+@_require_section('projects')
+def update_project(pid):
+    db = _get_db()
+    role = _get_user_role(db, g.current_user)
+    if role != ROLE_ADMIN:
+        return jsonify({'error': '无权限'}), 403
+    row = db.execute('SELECT * FROM projects WHERE id = ?', (pid,)).fetchone()
+    if not row:
+        return jsonify({'error': '项目不存在'}), 404
+    b = request.get_json(force=True) or {}
+    name = str(b.get('name', row['name'])).strip()
+    if not name:
+        return jsonify({'error': '项目名称不能为空'}), 400
+    if len(name) > MAX_TITLE_LENGTH:
+        return jsonify({'error': '项目名称过长'}), 400
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        db.execute('UPDATE projects SET name = ?, updated_at = ? WHERE id = ?', (name, now, pid))
+        if 'members' in b:
+            db.execute('DELETE FROM project_members WHERE project_id = ?', (pid,))
+            for uname in b['members']:
+                db.execute('INSERT OR IGNORE INTO project_members (project_id, username) VALUES (?, ?)', (pid, uname))
+        db.commit()
+    mrows = db.execute('SELECT username FROM project_members WHERE project_id = ?', (pid,)).fetchall()
+    return jsonify({
+        'status': 'ok',
+        'project': {'id': pid, 'name': name, 'created_by': row['created_by'],
+                     'created_at': row['created_at'], 'updated_at': now,
+                     'members': [m['username'] for m in mrows]},
+    })
+
+
+@app.route('/api/projects/<pid>', methods=['DELETE'])
+@_require_auth
+@_require_section('projects')
+def delete_project(pid):
+    db = _get_db()
+    role = _get_user_role(db, g.current_user)
+    if role != ROLE_ADMIN:
+        return jsonify({'error': '无权限'}), 403
+    row = db.execute('SELECT id FROM projects WHERE id = ?', (pid,)).fetchone()
+    if not row:
+        return jsonify({'error': '项目不存在'}), 404
+    with _lock:
+        db = _get_db()
+        db.execute('DELETE FROM project_members WHERE project_id = ?', (pid,))
+        db.execute('DELETE FROM project_topics WHERE project_id = ?', (pid,))
+        # notes cascade handles comments, questions, tags
+        nids = db.execute('SELECT id FROM project_notes WHERE project_id = ?', (pid,)).fetchall()
+        for n in nids:
+            db.execute('DELETE FROM project_note_tags WHERE note_id = ?', (n['id'],))
+            db.execute('DELETE FROM project_comments WHERE note_id = ?', (n['id'],))
+            db.execute('DELETE FROM project_questions WHERE note_id = ?', (n['id'],))
+        db.execute('DELETE FROM project_notes WHERE project_id = ?', (pid,))
+        db.execute('DELETE FROM projects WHERE id = ?', (pid,))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 项目主题 ─────────────────────────────────────────────────────────────────
+
+@app.route('/api/projects/<pid>/topics', methods=['GET'])
+@_require_auth
+@_require_section('projects')
+def list_project_topics(pid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    source = request.args.get('source', '').strip()
+    if source == 'notes':
+        rows = db.execute(
+            "SELECT DISTINCT topic AS name FROM project_notes WHERE project_id = ? AND topic != '' ORDER BY topic",
+            (pid,)
+        ).fetchall()
+    else:
+        rows = db.execute(
+            'SELECT name FROM project_topics WHERE project_id = ? ORDER BY name',
+            (pid,)
+        ).fetchall()
+    return jsonify([{'id': i, 'name': r['name']} for i, r in enumerate(rows)])
+
+
+# ── 项目笔记 CRUD ───────────────────────────────────────────────────────────
+
+@app.route('/api/projects/<pid>/notes', methods=['GET'])
+@_require_auth
+@_require_section('projects')
+def list_project_notes(pid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    topic = request.args.get('topic', '').strip()
+    tag = request.args.get('tag', '').strip()
+    sort = request.args.get('sort', 'updated_desc').strip()
+    q = request.args.get('q', '').strip()
+    fields = request.args.get('fields', '').strip()
+
+    sql = 'SELECT DISTINCT n.* FROM project_notes n'
+    params = []
+    if tag:
+        sql += ' JOIN project_note_tags pnt ON pnt.note_id = n.id JOIN tags t ON t.id = pnt.tag_id'
+    sql += ' WHERE n.project_id = ?'
+    params.append(pid)
+    if topic:
+        sql += ' AND n.topic = ?'
+        params.append(topic)
+    if tag:
+        sql += ' AND t.name = ?'
+        params.append(tag)
+    if q:
+        sql += ' AND (n.title LIKE ? OR n.content LIKE ?)'
+        like = f'%{q}%'
+        params.extend([like, like])
+
+    sort_map = {
+        'updated_desc': 'n.updated_at DESC',
+        'updated_asc': 'n.updated_at ASC',
+        'created_desc': 'n.created_at DESC',
+        'created_asc': 'n.created_at ASC',
+        'priority_desc': 'n.priority DESC, n.updated_at DESC',
+        'priority_asc': 'n.priority ASC, n.updated_at DESC',
+    }
+    sql += ' ORDER BY ' + sort_map.get(sort, 'n.updated_at DESC')
+
+    rows = db.execute(sql, params).fetchall()
+    result = []
+    for r in rows:
+        tags = _project_note_tags(db, r['id'])
+        d = _project_note_to_dict(r, tags)
+        if fields == 'metadata':
+            d.pop('content', None)
+        result.append(d)
+    return jsonify(result)
+
+
+@app.route('/api/projects/<pid>/notes', methods=['POST'])
+@_require_auth
+@_require_section('projects')
+def create_project_note(pid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    row = db.execute('SELECT id FROM projects WHERE id = ?', (pid,)).fetchone()
+    if not row:
+        return jsonify({'error': '项目不存在'}), 404
+
+    b = request.get_json(force=True) or {}
+    topic = str(b.get('topic', '')).strip()
+    if not topic:
+        return jsonify({'error': '主题不能为空'}), 400
+    title = str(b.get('title', '')).strip()
+    if len(title) > MAX_TITLE_LENGTH:
+        return jsonify({'error': '标题过长'}), 400
+    content = str(b.get('content', ''))
+    if len(content.encode('utf-8')) > MAX_CONTENT_SIZE:
+        return jsonify({'error': '内容过大'}), 400
+    priority = int(b.get('priority', 0))
+    tag_names = b.get('tags', [])
+
+    nid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        _ensure_project_topic(db, pid, topic)
+        _ensure_tags(db, tag_names)
+        db.execute(
+            'INSERT INTO project_notes (id, project_id, title, topic, content, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            (nid, pid, title, topic, content, priority, now, now)
+        )
+        _set_project_note_tags(db, nid, tag_names)
+        db.commit()
+        nr = db.execute('SELECT * FROM project_notes WHERE id = ?', (nid,)).fetchone()
+    tags = _project_note_tags(db, nid)
+    return jsonify(_project_note_to_dict(nr, tags))
+
+
+@app.route('/api/projects/<pid>/notes/<nid>', methods=['GET'])
+@_require_auth
+@_require_section('projects')
+def get_project_note(pid, nid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    row = db.execute('SELECT * FROM project_notes WHERE id = ? AND project_id = ?', (nid, pid)).fetchone()
+    if not row:
+        return jsonify({'error': '笔记不存在'}), 404
+    tags = _project_note_tags(db, nid)
+    return jsonify(_project_note_to_dict(row, tags))
+
+
+@app.route('/api/projects/<pid>/notes/<nid>', methods=['PUT'])
+@_require_auth
+@_require_section('projects')
+def update_project_note(pid, nid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    b = request.get_json(force=True) or {}
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM project_notes WHERE id = ? AND project_id = ?', (nid, pid)).fetchone()
+        if not row:
+            return jsonify({'error': '笔记不存在'}), 404
+        title = str(b.get('title', row['title'])).strip()
+        topic = str(b.get('topic', row['topic'])).strip()
+        if not topic:
+            return jsonify({'error': '主题不能为空'}), 400
+        if len(title) > MAX_TITLE_LENGTH:
+            return jsonify({'error': '标题过长'}), 400
+        content = str(b.get('content', row['content']))
+        if len(content.encode('utf-8')) > MAX_CONTENT_SIZE:
+            return jsonify({'error': '内容过大'}), 400
+        priority = int(b.get('priority', row['priority']))
+        now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+        _ensure_project_topic(db, pid, topic)
+        db.execute(
+            'UPDATE project_notes SET title = ?, topic = ?, content = ?, priority = ?, updated_at = ? WHERE id = ?',
+            (title, topic, content, priority, now, nid)
+        )
+        if 'tags' in b:
+            _ensure_tags(db, b['tags'])
+            _set_project_note_tags(db, nid, b['tags'])
+        db.commit()
+        nr = db.execute('SELECT * FROM project_notes WHERE id = ?', (nid,)).fetchone()
+    tags = _project_note_tags(db, nid)
+    return jsonify(_project_note_to_dict(nr, tags))
+
+
+@app.route('/api/projects/<pid>/notes/<nid>', methods=['DELETE'])
+@_require_auth
+@_require_section('projects')
+def delete_project_note(pid, nid):
+    with _lock:
+        db = _get_db()
+        if not _check_project_member(db, pid, g.current_user):
+            return jsonify({'error': '无权访问此项目'}), 403
+        row = db.execute('SELECT id FROM project_notes WHERE id = ? AND project_id = ?', (nid, pid)).fetchone()
+        if not row:
+            return jsonify({'error': '笔记不存在'}), 404
+        db.execute('DELETE FROM project_note_tags WHERE note_id = ?', (nid,))
+        db.execute('DELETE FROM project_comments WHERE note_id = ?', (nid,))
+        db.execute('DELETE FROM project_questions WHERE note_id = ?', (nid,))
+        db.execute('DELETE FROM project_notes WHERE id = ?', (nid,))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 项目笔记评论 & 问题 ─────────────────────────────────────────────────────
+
+@app.route('/api/projects/<pid>/notes/<nid>/comments', methods=['GET'])
+@_require_auth
+@_require_section('projects')
+def list_project_comments(pid, nid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    rows = db.execute('SELECT * FROM project_comments WHERE note_id = ? ORDER BY created_at ASC', (nid,)).fetchall()
+    return jsonify([_project_comment_to_dict(r) for r in rows])
+
+
+@app.route('/api/projects/<pid>/notes/<nid>/comments', methods=['POST'])
+@_require_auth
+@_require_section('projects')
+def create_project_comment(pid, nid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '评论内容不能为空'}), 400
+    parent_id = b.get('parent_id')
+    cid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO project_comments (id, note_id, parent_id, content, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (cid, nid, parent_id, content, g.current_user, now)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM project_comments WHERE id = ?', (cid,)).fetchone()
+    return jsonify(_project_comment_to_dict(row))
+
+
+@app.route('/api/project-comments/<cid>', methods=['DELETE'])
+@_require_auth
+@_require_section('projects')
+def delete_project_comment(cid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM project_comments WHERE id = ?', (cid,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        # Delete replies first
+        to_delete = [cid]
+        queue = [cid]
+        while queue:
+            parent = queue.pop(0)
+            children = db.execute('SELECT id FROM project_comments WHERE parent_id = ?', (parent,)).fetchall()
+            for c in children:
+                to_delete.append(c['id'])
+                queue.append(c['id'])
+        for did in to_delete:
+            db.execute('DELETE FROM project_comments WHERE id = ?', (did,))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+@app.route('/api/projects/<pid>/notes/<nid>/questions', methods=['GET'])
+@_require_auth
+@_require_section('projects')
+def list_project_questions(pid, nid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    rows = db.execute('SELECT * FROM project_questions WHERE note_id = ? ORDER BY created_at ASC', (nid,)).fetchall()
+    return jsonify([_project_question_to_dict(r) for r in rows])
+
+
+@app.route('/api/projects/<pid>/notes/<nid>/questions', methods=['POST'])
+@_require_auth
+@_require_section('projects')
+def create_project_question(pid, nid):
+    db = _get_db()
+    if not _check_project_member(db, pid, g.current_user):
+        return jsonify({'error': '无权访问此项目'}), 403
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '问题内容不能为空'}), 400
+    parent_id = b.get('parent_id')
+    qid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO project_questions (id, note_id, parent_id, content, created_by, resolved, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)',
+            (qid, nid, parent_id, content, g.current_user, now)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM project_questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_project_question_to_dict(row))
+
+
+@app.route('/api/project-questions/<qid>/toggle-resolved', methods=['POST'])
+@_require_auth
+@_require_section('projects')
+def toggle_project_question_resolved(qid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM project_questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        new_val = 0 if row['resolved'] else 1
+        db.execute('UPDATE project_questions SET resolved = ? WHERE id = ?', (new_val, qid))
+        db.commit()
+        row = db.execute('SELECT * FROM project_questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_project_question_to_dict(row))
+
+
+@app.route('/api/project-questions/<qid>', methods=['DELETE'])
+@_require_auth
+@_require_section('projects')
+def delete_project_question(qid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM project_questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        to_delete = [qid]
+        queue = [qid]
+        while queue:
+            parent = queue.pop(0)
+            children = db.execute('SELECT id FROM project_questions WHERE parent_id = ?', (parent,)).fetchall()
+            for c in children:
+                to_delete.append(c['id'])
+                queue.append(c['id'])
+        for did in to_delete:
+            db.execute('DELETE FROM project_questions WHERE id = ?', (did,))
         db.commit()
     return jsonify({'status': 'ok'})
 
