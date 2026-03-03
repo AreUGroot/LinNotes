@@ -3,7 +3,9 @@ import os
 import secrets
 import sqlite3
 import threading
+import time
 import uuid
+from collections import defaultdict
 from datetime import datetime, timezone
 from functools import wraps
 
@@ -11,6 +13,7 @@ from flask import Flask, g, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB max request
 CORS(app)
 
 _lock = threading.Lock()
@@ -19,12 +22,32 @@ IMAGES_DIR = os.path.join(DATA, 'images')
 DB_PATH = os.environ.get('DB_PATH', os.path.join(DATA, 'app.db'))
 SESSIONS = {}
 
+# Rate limiting: per-token, 60 requests per minute
+RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_MAX = 60
+_rate_limits = defaultdict(list)
+
+DOCUMENTS_DIR = os.path.join(DATA, 'documents')
+
 ALLOWED_IMAGE_EXTS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10 MB
+
+ALLOWED_DOC_EXTS = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'zip', 'rar', 'md', 'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_DOC_SIZE = 2 * 1024 * 1024  # 2 MB
 
 # Role constants
 ROLE_ADMIN = 'admin'
 ROLE_USER = 'user'
+
+# Valid opinion types
+VALID_OP_TYPES = ('事实', '观点', '反驳', '预测', '计划')
+
+# Valid permission sections
+VALID_SECTIONS = ('notes', 'opinions', 'archives')
+
+# Input length limits
+MAX_TITLE_LENGTH = 500
+MAX_CONTENT_SIZE = 500 * 1024  # 500 KB
 
 
 def _get_db():
@@ -142,6 +165,82 @@ def _init_db():
             created_at TEXT NOT NULL,
             FOREIGN KEY (opinion_id) REFERENCES opinions(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS archives (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT '',
+            topic TEXT NOT NULL DEFAULT '',
+            content_description TEXT NOT NULL,
+            author TEXT NOT NULL DEFAULT '',
+            body TEXT NOT NULL DEFAULT '',
+            created_by TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS archive_tags (
+            archive_id TEXT NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (archive_id, tag_id),
+            FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS archive_documents (
+            id TEXT PRIMARY KEY,
+            archive_id TEXT NOT NULL,
+            filename TEXT NOT NULL,
+            original_name TEXT NOT NULL,
+            file_size INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS archive_comments (
+            id TEXT PRIMARY KEY,
+            archive_id TEXT NOT NULL,
+            parent_id TEXT,
+            content TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS archive_questions (
+            id TEXT PRIMARY KEY,
+            archive_id TEXT NOT NULL,
+            parent_id TEXT,
+            content TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            resolved INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS archive_ratings (
+            id TEXT PRIMARY KEY,
+            archive_id TEXT NOT NULL,
+            rating INTEGER NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            FOREIGN KEY (archive_id) REFERENCES archives(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS user_permissions (
+            username TEXT NOT NULL,
+            section TEXT NOT NULL,
+            PRIMARY KEY (username, section),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS api_keys (
+            key TEXT PRIMARY KEY,
+            username TEXT NOT NULL,
+            label TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            last_used_at TEXT,
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+        );
     ''')
 
     # Ensure role column exists (for existing databases)
@@ -169,6 +268,24 @@ def _init_db():
     except sqlite3.OperationalError:
         db.execute("ALTER TABLE opinion_questions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
 
+    # Migrate: add new opinion fields for expanded types
+    for col, col_type, default in [
+        ('rebutted_opinion', 'TEXT', "''"),
+        ('rebutted_source', 'TEXT', "''"),
+        ('fact_source', 'TEXT', "''"),
+        ('fact_link', 'TEXT', "''"),
+        ('verify_priority', 'INTEGER', '0'),
+    ]:
+        try:
+            db.execute(f'SELECT {col} FROM opinions LIMIT 1')
+        except sqlite3.OperationalError:
+            db.execute(f'ALTER TABLE opinions ADD COLUMN {col} {col_type} DEFAULT {default}')
+
+    # Fix old data: decouple topic from type name
+    db.execute("UPDATE opinions SET topic = '' WHERE topic IN ('观点', '预测')")
+    db.execute("UPDATE opinions SET topic = REPLACE(topic, '观点 / ', '') WHERE topic LIKE '观点 / %'")
+    db.execute("UPDATE opinions SET topic = REPLACE(topic, '预测 / ', '') WHERE topic LIKE '预测 / %'")
+
     db.execute(
         'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)',
         ('Lin', '951204', ROLE_ADMIN)
@@ -180,6 +297,27 @@ def _init_db():
         'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)',
         ('Qingli', '888888', ROLE_USER)
     )
+
+    # Test accounts
+    for uname, pwd in [('TestUser1', '123456'), ('TestUser2', '123456'), ('TestUser3', '123456')]:
+        db.execute(
+            'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)',
+            (uname, pwd, ROLE_USER)
+        )
+
+    # Seed default permissions
+    for section in VALID_SECTIONS:
+        db.execute(
+            'INSERT OR IGNORE INTO user_permissions (username, section) VALUES (?, ?)',
+            ('Lin', section)
+        )
+    for uname in ('Qingli', 'TestUser1', 'TestUser2', 'TestUser3'):
+        for section in ('opinions', 'archives'):
+            db.execute(
+                'INSERT OR IGNORE INTO user_permissions (username, section) VALUES (?, ?)',
+                (uname, section)
+            )
+
     db.commit()
 
 
@@ -194,6 +332,22 @@ def _make_token(username):
     return token
 
 
+def _check_rate_limit(token):
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW
+    timestamps = _rate_limits[token]
+    _rate_limits[token] = [t for t in timestamps if t > window_start]
+    if len(_rate_limits[token]) >= RATE_LIMIT_MAX:
+        return False
+    _rate_limits[token].append(now)
+    # Prevent unbounded growth: purge stale tokens periodically
+    if len(_rate_limits) > 10000:
+        stale = [k for k, v in _rate_limits.items() if not v or v[-1] < window_start]
+        for k in stale:
+            del _rate_limits[k]
+    return True
+
+
 def _require_auth(view_fn):
     @wraps(view_fn)
     def wrapper(*args, **kwargs):
@@ -201,12 +355,43 @@ def _require_auth(view_fn):
         if not auth.startswith('Bearer '):
             return jsonify({'error': '未登录'}), 401
         token = auth.split(' ', 1)[1].strip()
+
+        if not _check_rate_limit(token):
+            return jsonify({'error': '请求过于频繁，请稍后再试'}), 429
+
+        # Try session token first (fast in-memory lookup)
         username = SESSIONS.get(token)
         if not username:
-            return jsonify({'error': '登录已失效，请重新登录'}), 401
+            # Fallback to API key (database lookup)
+            db = _get_db()
+            row = db.execute(
+                'SELECT username FROM api_keys WHERE key = ?', (token,)
+            ).fetchone()
+            if row:
+                username = row['username']
+                now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+                db.execute('UPDATE api_keys SET last_used_at = ? WHERE key = ?', (now, token))
+                db.commit()
+            else:
+                return jsonify({'error': '登录已失效，请重新登录'}), 401
+
         g.current_user = username
         return view_fn(*args, **kwargs)
     return wrapper
+
+
+def _require_section(section):
+    """Check if user has permission for a section. Use AFTER @_require_auth."""
+    def decorator(view_fn):
+        @wraps(view_fn)
+        def wrapper(*args, **kwargs):
+            db = _get_db()
+            permissions = _get_user_permissions(db, g.current_user)
+            if section not in permissions:
+                return jsonify({'error': f'无权访问 {section} 模块'}), 403
+            return view_fn(*args, **kwargs)
+        return wrapper
+    return decorator
 
 
 def _note_tags(db, note_id):
@@ -250,6 +435,102 @@ def _set_note_tags(db, note_id, tag_names):
             )
 
 
+# ── 归档辅助 ─────────────────────────────────────────────────────────────────
+def _archive_tags(db, archive_id):
+    rows = db.execute(
+        'SELECT t.name FROM tags t JOIN archive_tags at2 ON at2.tag_id = t.id WHERE at2.archive_id = ?',
+        (archive_id,)
+    ).fetchall()
+    return [r['name'] for r in rows]
+
+
+def _set_archive_tags(db, archive_id, tag_names):
+    db.execute('DELETE FROM archive_tags WHERE archive_id = ?', (archive_id,))
+    for name in tag_names:
+        row = db.execute('SELECT id FROM tags WHERE name = ?', (name,)).fetchone()
+        if row:
+            db.execute(
+                'INSERT OR IGNORE INTO archive_tags (archive_id, tag_id) VALUES (?, ?)',
+                (archive_id, row['id'])
+            )
+
+
+def _archive_to_dict(row, tags):
+    return {
+        'id': row['id'],
+        'title': row['title'],
+        'topic': row['topic'],
+        'content_description': row['content_description'],
+        'author': row['author'],
+        'body': row['body'],
+        'tags': tags,
+        'created_by': row['created_by'],
+        'created_at': row['created_at'],
+        'updated_at': row['updated_at'],
+    }
+
+
+def _archive_avg_rating(db, archive_id):
+    row = db.execute(
+        'SELECT AVG(rating) as avg_rating FROM archive_ratings WHERE archive_id = ?',
+        (archive_id,)
+    ).fetchone()
+    return round(row['avg_rating'], 1) if row and row['avg_rating'] is not None else 0
+
+
+def _archive_documents(db, archive_id):
+    rows = db.execute(
+        'SELECT * FROM archive_documents WHERE archive_id = ? ORDER BY created_at ASC',
+        (archive_id,)
+    ).fetchall()
+    return [{'id': r['id'], 'filename': r['filename'], 'original_name': r['original_name'],
+             'file_size': r['file_size'], 'url': f'/data/documents/{r["filename"]}',
+             'created_at': r['created_at']} for r in rows]
+
+
+def _archive_comment_to_dict(row):
+    return {
+        'id': row['id'],
+        'archive_id': row['archive_id'],
+        'parent_id': row['parent_id'],
+        'content': row['content'],
+        'created_by': row['created_by'],
+        'created_at': row['created_at'],
+    }
+
+
+def _archive_question_to_dict(row):
+    return {
+        'id': row['id'],
+        'archive_id': row['archive_id'],
+        'parent_id': row['parent_id'],
+        'content': row['content'],
+        'created_by': row['created_by'],
+        'resolved': bool(row['resolved']),
+        'created_at': row['created_at'],
+    }
+
+
+def _archive_rating_to_dict(row):
+    return {
+        'id': row['id'],
+        'archive_id': row['archive_id'],
+        'rating': row['rating'],
+        'created_by': row['created_by'],
+        'created_at': row['created_at'],
+    }
+
+
+def _get_user_permissions(db, username):
+    role = _get_user_role(db, username)
+    if role == ROLE_ADMIN:
+        return list(VALID_SECTIONS)
+    rows = db.execute(
+        'SELECT section FROM user_permissions WHERE username = ?', (username,)
+    ).fetchall()
+    return [r['section'] for r in rows]
+
+
 # ── 主页 ─────────────────────────────────────────────────────────────────────
 @app.route('/')
 def index():
@@ -260,6 +541,11 @@ def index():
 @app.route('/data/images/<path:filename>')
 def serve_image(filename):
     return send_from_directory(IMAGES_DIR, filename)
+
+
+@app.route('/data/documents/<path:filename>')
+def serve_document(filename):
+    return send_from_directory(DOCUMENTS_DIR, filename)
 
 
 # ── 鉴权 API ─────────────────────────────────────────────────────────────────
@@ -280,11 +566,13 @@ def login():
         return jsonify({'error': '用户名或密码错误'}), 401
 
     token = _make_token(username)
+    permissions = _get_user_permissions(db, username)
     return jsonify({
         'status': 'ok',
         'token': token,
         'username': username,
         'role': row['role'],
+        'permissions': permissions,
     })
 
 
@@ -293,7 +581,8 @@ def login():
 def me():
     db = _get_db()
     role = _get_user_role(db, g.current_user)
-    return jsonify({'status': 'ok', 'username': g.current_user, 'role': role})
+    permissions = _get_user_permissions(db, g.current_user)
+    return jsonify({'status': 'ok', 'username': g.current_user, 'role': role, 'permissions': permissions})
 
 
 # ── 主题 API ─────────────────────────────────────────────────────────────────
@@ -345,6 +634,7 @@ def create_tag():
 # ── 笔记 API ─────────────────────────────────────────────────────────────────
 @app.route('/api/notes', methods=['GET'])
 @_require_auth
+@_require_section('notes')
 def list_notes():
     topic = request.args.get('topic', '').strip()
     tag = request.args.get('tag', '').strip()
@@ -389,11 +679,16 @@ def list_notes():
             tags = _note_tags(db, row['id'])
             result.append(_note_to_dict(row, tags))
 
+    if request.args.get('fields') == 'metadata':
+        for item in result:
+            item.pop('content', None)
+
     return jsonify(result)
 
 
 @app.route('/api/notes', methods=['POST'])
 @_require_auth
+@_require_section('notes')
 def create_note():
     b = request.get_json(force=True) or {}
     title = str(b.get('title', '')).strip()
@@ -404,6 +699,10 @@ def create_note():
 
     if not topic:
         return jsonify({'error': '请选择或创建主题'}), 400
+    if len(title) > MAX_TITLE_LENGTH:
+        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+    if len(content) > MAX_CONTENT_SIZE:
+        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
     note_id = uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -426,6 +725,7 @@ def create_note():
 
 @app.route('/api/notes/<note_id>', methods=['GET'])
 @_require_auth
+@_require_section('notes')
 def get_note(note_id):
     db = _get_db()
     row = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
@@ -437,6 +737,7 @@ def get_note(note_id):
 
 @app.route('/api/notes/<note_id>', methods=['PUT'])
 @_require_auth
+@_require_section('notes')
 def update_note(note_id):
     b = request.get_json(force=True) or {}
     title = str(b.get('title', '')).strip()
@@ -447,6 +748,10 @@ def update_note(note_id):
 
     if not topic:
         return jsonify({'error': '请选择或创建主题'}), 400
+    if len(title) > MAX_TITLE_LENGTH:
+        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+    if len(content) > MAX_CONTENT_SIZE:
+        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -472,6 +777,7 @@ def update_note(note_id):
 
 @app.route('/api/notes/<note_id>', methods=['DELETE'])
 @_require_auth
+@_require_section('notes')
 def delete_note(note_id):
     with _lock:
         db = _get_db()
@@ -494,6 +800,7 @@ def _comment_to_dict(row):
 
 @app.route('/api/notes/<note_id>/comments', methods=['GET'])
 @_require_auth
+@_require_section('notes')
 def list_comments(note_id):
     db = _get_db()
     rows = db.execute(
@@ -505,6 +812,7 @@ def list_comments(note_id):
 
 @app.route('/api/notes/<note_id>/comments', methods=['POST'])
 @_require_auth
+@_require_section('notes')
 def create_comment(note_id):
     b = request.get_json(force=True) or {}
     content = str(b.get('content', '')).strip()
@@ -539,6 +847,7 @@ def _question_to_dict(row):
 
 @app.route('/api/notes/<note_id>/questions', methods=['GET'])
 @_require_auth
+@_require_section('notes')
 def list_questions(note_id):
     db = _get_db()
     rows = db.execute(
@@ -550,6 +859,7 @@ def list_questions(note_id):
 
 @app.route('/api/notes/<note_id>/questions', methods=['POST'])
 @_require_auth
+@_require_section('notes')
 def create_question(note_id):
     b = request.get_json(force=True) or {}
     content = str(b.get('content', '')).strip()
@@ -590,6 +900,7 @@ def _delete_thread_rows(db, table, root_id):
 
 @app.route('/api/comments/<cid>', methods=['DELETE'])
 @_require_auth
+@_require_section('notes')
 def delete_comment(cid):
     with _lock:
         db = _get_db()
@@ -603,6 +914,7 @@ def delete_comment(cid):
 
 @app.route('/api/questions/<qid>/toggle-resolved', methods=['POST'])
 @_require_auth
+@_require_section('notes')
 def toggle_resolved(qid):
     with _lock:
         db = _get_db()
@@ -618,6 +930,7 @@ def toggle_resolved(qid):
 
 @app.route('/api/questions/<qid>', methods=['DELETE'])
 @_require_auth
+@_require_section('notes')
 def delete_question(qid):
     with _lock:
         db = _get_db()
@@ -631,7 +944,7 @@ def delete_question(qid):
 
 # ── 观点与预测 API ─────────────────────────────────────────────────────────────
 def _opinion_to_dict(row):
-    return {
+    d = {
         'id': row['id'],
         'type': row['type'],
         'topic': row['topic'],
@@ -643,6 +956,16 @@ def _opinion_to_dict(row):
         'created_at': row['created_at'],
         'updated_at': row['updated_at'],
     }
+    for col in ('rebutted_opinion', 'rebutted_source', 'fact_source', 'fact_link'):
+        try:
+            d[col] = row[col]
+        except (IndexError, KeyError):
+            d[col] = ''
+    try:
+        d['verify_priority'] = row['verify_priority']
+    except (IndexError, KeyError):
+        d['verify_priority'] = 0
+    return d
 
 
 def _opinion_avg_rating(db, opinion_id):
@@ -663,6 +986,7 @@ def _opinion_latest_measure_time(db, opinion_id):
 
 @app.route('/api/opinions', methods=['GET'])
 @_require_auth
+@_require_section('opinions')
 def list_opinions():
     op_type = request.args.get('type', '').strip()
     created_by = request.args.get('created_by', '').strip()
@@ -690,6 +1014,8 @@ def list_opinions():
         'updated_desc': 'updated_at DESC',
         'created_desc': 'created_at DESC',
         'created_asc': 'created_at ASC',
+        'verify_priority_desc': 'verify_priority DESC, updated_at DESC',
+        'verify_priority_asc': 'verify_priority ASC, updated_at DESC',
     }
     # For rating/measure_time sort, we sort in Python after fetching
     db_sort = sort_map.get(sort, '')
@@ -715,11 +1041,16 @@ def list_opinions():
     elif sort == 'measure_time_asc':
         result.sort(key=lambda x: x['measure_time'] or '')
 
+    if request.args.get('fields') == 'metadata':
+        for item in result:
+            item.pop('content', None)
+
     return jsonify(result)
 
 
 @app.route('/api/opinions', methods=['POST'])
 @_require_auth
+@_require_section('opinions')
 def create_opinion():
     b = request.get_json(force=True) or {}
     op_type = str(b.get('type', '')).strip()
@@ -728,11 +1059,24 @@ def create_opinion():
     content = str(b.get('content', ''))
     predictor = str(b.get('predictor', '')).strip()
     time_scale = str(b.get('time_scale', '')).strip()
+    rebutted_opinion = str(b.get('rebutted_opinion', '')).strip()
+    rebutted_source = str(b.get('rebutted_source', '')).strip()
+    fact_source = str(b.get('fact_source', '')).strip()
+    fact_link = str(b.get('fact_link', '')).strip()
+    verify_priority = int(b.get('verify_priority', 0) or 0)
 
-    if op_type not in ('观点', '预测'):
-        return jsonify({'error': '类型必须为"观点"或"预测"'}), 400
-    if not topic:
-        return jsonify({'error': '请选择或创建主题'}), 400
+    if op_type not in VALID_OP_TYPES:
+        return jsonify({'error': '类型必须为: ' + ', '.join(VALID_OP_TYPES)}), 400
+    if len(title) > MAX_TITLE_LENGTH:
+        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+    if len(content) > MAX_CONTENT_SIZE:
+        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
+    if op_type == '反驳' and not content.strip():
+        return jsonify({'error': '反驳类型必须填写正文'}), 400
+    if op_type == '反驳' and not predictor:
+        return jsonify({'error': '反驳类型必须填写反驳人'}), 400
+    if op_type == '事实' and not fact_source:
+        return jsonify({'error': '事实类型必须填写出处描述'}), 400
 
     oid = uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
@@ -740,8 +1084,13 @@ def create_opinion():
     with _lock:
         db = _get_db()
         db.execute(
-            'INSERT INTO opinions (id, type, topic, title, content, predictor, time_scale, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            (oid, op_type, topic, title, content, predictor, time_scale, g.current_user, now, now)
+            '''INSERT INTO opinions (id, type, topic, title, content, predictor, time_scale,
+               rebutted_opinion, rebutted_source, fact_source, fact_link, verify_priority,
+               created_by, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (oid, op_type, topic, title, content, predictor, time_scale,
+             rebutted_opinion, rebutted_source, fact_source, fact_link, verify_priority,
+             g.current_user, now, now)
         )
         db.commit()
         row = db.execute('SELECT * FROM opinions WHERE id = ?', (oid,)).fetchone()
@@ -754,6 +1103,7 @@ def create_opinion():
 
 @app.route('/api/opinions/<oid>', methods=['GET'])
 @_require_auth
+@_require_section('opinions')
 def get_opinion(oid):
     db = _get_db()
     row = db.execute('SELECT * FROM opinions WHERE id = ?', (oid,)).fetchone()
@@ -767,6 +1117,7 @@ def get_opinion(oid):
 
 @app.route('/api/opinions/<oid>', methods=['PUT'])
 @_require_auth
+@_require_section('opinions')
 def update_opinion(oid):
     b = request.get_json(force=True) or {}
     title = str(b.get('title', '')).strip()
@@ -774,9 +1125,16 @@ def update_opinion(oid):
     content = str(b.get('content', ''))
     predictor = str(b.get('predictor', '')).strip()
     time_scale = str(b.get('time_scale', '')).strip()
+    rebutted_opinion = str(b.get('rebutted_opinion', '')).strip()
+    rebutted_source = str(b.get('rebutted_source', '')).strip()
+    fact_source = str(b.get('fact_source', '')).strip()
+    fact_link = str(b.get('fact_link', '')).strip()
+    verify_priority = int(b.get('verify_priority', 0) or 0)
 
-    if not topic:
-        return jsonify({'error': '请选择或创建主题'}), 400
+    if len(title) > MAX_TITLE_LENGTH:
+        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+    if len(content) > MAX_CONTENT_SIZE:
+        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -786,9 +1144,21 @@ def update_opinion(oid):
         if not row:
             return jsonify({'error': '不存在'}), 404
 
+        op_type = row['type']
+        if op_type == '反驳' and not content.strip():
+            return jsonify({'error': '反驳类型必须填写正文'}), 400
+        if op_type == '反驳' and not predictor:
+            return jsonify({'error': '反驳类型必须填写反驳人'}), 400
+        if op_type == '事实' and not fact_source:
+            return jsonify({'error': '事实类型必须填写出处描述'}), 400
+
         db.execute(
-            'UPDATE opinions SET title=?, topic=?, content=?, predictor=?, time_scale=?, updated_at=? WHERE id=?',
-            (title, topic, content, predictor, time_scale, now, oid)
+            '''UPDATE opinions SET title=?, topic=?, content=?, predictor=?, time_scale=?,
+               rebutted_opinion=?, rebutted_source=?, fact_source=?, fact_link=?, verify_priority=?,
+               updated_at=? WHERE id=?''',
+            (title, topic, content, predictor, time_scale,
+             rebutted_opinion, rebutted_source, fact_source, fact_link, verify_priority,
+             now, oid)
         )
         db.commit()
         row = db.execute('SELECT * FROM opinions WHERE id = ?', (oid,)).fetchone()
@@ -801,6 +1171,7 @@ def update_opinion(oid):
 
 @app.route('/api/opinions/<oid>', methods=['DELETE'])
 @_require_auth
+@_require_section('opinions')
 def delete_opinion(oid):
     with _lock:
         db = _get_db()
@@ -823,6 +1194,7 @@ def _opinion_comment_to_dict(row):
 
 @app.route('/api/opinions/<oid>/comments', methods=['GET'])
 @_require_auth
+@_require_section('opinions')
 def list_opinion_comments(oid):
     db = _get_db()
     rows = db.execute(
@@ -834,6 +1206,7 @@ def list_opinion_comments(oid):
 
 @app.route('/api/opinions/<oid>/comments', methods=['POST'])
 @_require_auth
+@_require_section('opinions')
 def create_opinion_comment(oid):
     b = request.get_json(force=True) or {}
     content = str(b.get('content', '')).strip()
@@ -856,6 +1229,7 @@ def create_opinion_comment(oid):
 
 @app.route('/api/opinion-comments/<cid>', methods=['DELETE'])
 @_require_auth
+@_require_section('opinions')
 def delete_opinion_comment(cid):
     with _lock:
         db = _get_db()
@@ -882,6 +1256,7 @@ def _opinion_question_to_dict(row):
 
 @app.route('/api/opinions/<oid>/questions', methods=['GET'])
 @_require_auth
+@_require_section('opinions')
 def list_opinion_questions(oid):
     db = _get_db()
     rows = db.execute(
@@ -893,6 +1268,7 @@ def list_opinion_questions(oid):
 
 @app.route('/api/opinions/<oid>/questions', methods=['POST'])
 @_require_auth
+@_require_section('opinions')
 def create_opinion_question(oid):
     b = request.get_json(force=True) or {}
     content = str(b.get('content', '')).strip()
@@ -915,6 +1291,7 @@ def create_opinion_question(oid):
 
 @app.route('/api/opinion-questions/<qid>/toggle-resolved', methods=['POST'])
 @_require_auth
+@_require_section('opinions')
 def toggle_opinion_question_resolved(qid):
     with _lock:
         db = _get_db()
@@ -930,6 +1307,7 @@ def toggle_opinion_question_resolved(qid):
 
 @app.route('/api/opinion-questions/<qid>', methods=['DELETE'])
 @_require_auth
+@_require_section('opinions')
 def delete_opinion_question(qid):
     with _lock:
         db = _get_db()
@@ -955,6 +1333,7 @@ def _opinion_rating_to_dict(row):
 
 @app.route('/api/opinions/<oid>/ratings', methods=['GET'])
 @_require_auth
+@_require_section('opinions')
 def list_opinion_ratings(oid):
     db = _get_db()
     rows = db.execute(
@@ -966,6 +1345,7 @@ def list_opinion_ratings(oid):
 
 @app.route('/api/opinions/<oid>/ratings', methods=['POST'])
 @_require_auth
+@_require_section('opinions')
 def create_opinion_rating(oid):
     b = request.get_json(force=True) or {}
     rating = int(b.get('rating', 0))
@@ -989,6 +1369,7 @@ def create_opinion_rating(oid):
 
 @app.route('/api/opinion-ratings/<rid>', methods=['DELETE'])
 @_require_auth
+@_require_section('opinions')
 def delete_opinion_rating(rid):
     with _lock:
         db = _get_db()
@@ -1003,6 +1384,7 @@ def delete_opinion_rating(rid):
 # ── 观点筛选选项 API ──────────────────────────────────────────────────────────
 @app.route('/api/opinions/filter-options', methods=['GET'])
 @_require_auth
+@_require_section('opinions')
 def opinion_filter_options():
     db = _get_db()
     creators = db.execute("SELECT DISTINCT created_by FROM opinions ORDER BY created_by").fetchall()
@@ -1043,15 +1425,531 @@ def upload_image():
     return jsonify({'status': 'ok', 'url': f'/data/images/{filename}'})
 
 
+# ── 权限 API ─────────────────────────────────────────────────────────────────
+@app.route('/api/permissions', methods=['GET'])
+@_require_auth
+def list_permissions():
+    db = _get_db()
+    role = _get_user_role(db, g.current_user)
+    if role != ROLE_ADMIN:
+        return jsonify({'error': '无权限'}), 403
+    users = db.execute('SELECT username, role FROM users ORDER BY username').fetchall()
+    result = []
+    for u in users:
+        perms = db.execute(
+            'SELECT section FROM user_permissions WHERE username = ?', (u['username'],)
+        ).fetchall()
+        result.append({
+            'username': u['username'],
+            'role': u['role'],
+            'permissions': [p['section'] for p in perms],
+        })
+    return jsonify(result)
+
+
+@app.route('/api/permissions/<username>', methods=['PUT'])
+@_require_auth
+def update_permissions(username):
+    db = _get_db()
+    role = _get_user_role(db, g.current_user)
+    if role != ROLE_ADMIN:
+        return jsonify({'error': '无权限'}), 403
+    b = request.get_json(force=True) or {}
+    sections = [s for s in b.get('permissions', []) if s in VALID_SECTIONS]
+    with _lock:
+        db = _get_db()
+        db.execute('DELETE FROM user_permissions WHERE username = ?', (username,))
+        for section in sections:
+            db.execute(
+                'INSERT INTO user_permissions (username, section) VALUES (?, ?)',
+                (username, section)
+            )
+        db.commit()
+    return jsonify({'status': 'ok', 'username': username, 'permissions': sections})
+
+
+# ── API Key 管理 ─────────────────────────────────────────────────────────────
+@app.route('/api/auth/api-keys', methods=['GET'])
+@_require_auth
+def list_api_keys():
+    db = _get_db()
+    rows = db.execute(
+        'SELECT key, label, created_at, last_used_at FROM api_keys WHERE username = ? ORDER BY created_at DESC',
+        (g.current_user,)
+    ).fetchall()
+    return jsonify([{
+        'key_prefix': r['key'][:8],
+        'label': r['label'],
+        'created_at': r['created_at'],
+        'last_used_at': r['last_used_at'],
+    } for r in rows])
+
+
+@app.route('/api/auth/api-keys', methods=['POST'])
+@_require_auth
+def create_api_key():
+    b = request.get_json(force=True) or {}
+    label = str(b.get('label', '')).strip() or 'default'
+
+    key = secrets.token_urlsafe(32)
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO api_keys (key, username, label, created_at) VALUES (?, ?, ?, ?)',
+            (key, g.current_user, label, now)
+        )
+        db.commit()
+
+    return jsonify({
+        'status': 'ok',
+        'key': key,
+        'label': label,
+        'created_at': now,
+        'warning': '请保存此密钥，它不会再次显示。',
+    })
+
+
+@app.route('/api/auth/api-keys/<key_prefix>', methods=['DELETE'])
+@_require_auth
+def delete_api_key(key_prefix):
+    with _lock:
+        db = _get_db()
+        row = db.execute(
+            'SELECT key FROM api_keys WHERE username = ? AND key LIKE ?',
+            (g.current_user, key_prefix + '%')
+        ).fetchone()
+        if not row:
+            return jsonify({'error': 'API密钥不存在'}), 404
+        db.execute('DELETE FROM api_keys WHERE key = ?', (row['key'],))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 归档 API ─────────────────────────────────────────────────────────────────
+@app.route('/api/archives', methods=['GET'])
+@_require_auth
+@_require_section('archives')
+def list_archives():
+    topic = request.args.get('topic', '').strip()
+    tag = request.args.get('tag', '').strip()
+    sort = request.args.get('sort', 'updated_desc').strip()
+
+    base = 'SELECT DISTINCT a.* FROM archives a'
+    joins = []
+    wheres = []
+    params = []
+
+    if tag:
+        joins.append('JOIN archive_tags at2 ON at2.archive_id = a.id')
+        joins.append('JOIN tags t ON t.id = at2.tag_id')
+        wheres.append('t.name = ?')
+        params.append(tag)
+    if topic:
+        wheres.append('a.topic = ?')
+        params.append(topic)
+
+    sql = base
+    if joins:
+        sql += ' ' + ' '.join(joins)
+    if wheres:
+        sql += ' WHERE ' + ' AND '.join(wheres)
+
+    sort_map = {
+        'updated_desc': 'a.updated_at DESC',
+        'created_desc': 'a.created_at DESC',
+        'created_asc': 'a.created_at ASC',
+    }
+    db_sort = sort_map.get(sort, '')
+    if db_sort:
+        sql += ' ORDER BY ' + db_sort
+
+    with _lock:
+        db = _get_db()
+        rows = db.execute(sql, params).fetchall()
+        result = []
+        for row in rows:
+            tags = _archive_tags(db, row['id'])
+            d = _archive_to_dict(row, tags)
+            d['avg_rating'] = _archive_avg_rating(db, row['id'])
+            d['document_count'] = len(_archive_documents(db, row['id']))
+            result.append(d)
+
+    if sort == 'rating_desc':
+        result.sort(key=lambda x: x['avg_rating'], reverse=True)
+    elif sort == 'rating_asc':
+        result.sort(key=lambda x: x['avg_rating'])
+
+    if request.args.get('fields') == 'metadata':
+        for item in result:
+            item.pop('body', None)
+
+    return jsonify(result)
+
+
+@app.route('/api/archives', methods=['POST'])
+@_require_auth
+@_require_section('archives')
+def create_archive():
+    b = request.get_json(force=True) or {}
+    title = str(b.get('title', '')).strip()
+    topic = str(b.get('topic', '')).strip()
+    content_description = str(b.get('content_description', '')).strip()
+    author = str(b.get('author', '')).strip()
+    body = str(b.get('body', ''))
+    tag_names = b.get('tags', [])
+
+    if not content_description:
+        return jsonify({'error': '内容描述及链接不能为空'}), 400
+    if len(title) > MAX_TITLE_LENGTH:
+        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+    if len(body) > MAX_CONTENT_SIZE:
+        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
+
+    aid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+    with _lock:
+        db = _get_db()
+        if topic:
+            _ensure_topic(db, topic)
+        _ensure_tags(db, tag_names)
+        db.execute(
+            '''INSERT INTO archives (id, title, topic, content_description, author, body,
+               created_by, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            (aid, title, topic, content_description, author, body, g.current_user, now, now)
+        )
+        _set_archive_tags(db, aid, tag_names)
+        db.commit()
+        tags = _archive_tags(db, aid)
+        row = db.execute('SELECT * FROM archives WHERE id = ?', (aid,)).fetchone()
+
+    d = _archive_to_dict(row, tags)
+    d['avg_rating'] = 0
+    d['documents'] = []
+    return jsonify({'status': 'ok', 'archive': d})
+
+
+@app.route('/api/archives/<aid>', methods=['GET'])
+@_require_auth
+@_require_section('archives')
+def get_archive(aid):
+    db = _get_db()
+    row = db.execute('SELECT * FROM archives WHERE id = ?', (aid,)).fetchone()
+    if not row:
+        return jsonify({'error': '归档不存在'}), 404
+    tags = _archive_tags(db, aid)
+    d = _archive_to_dict(row, tags)
+    d['avg_rating'] = _archive_avg_rating(db, aid)
+    d['documents'] = _archive_documents(db, aid)
+    return jsonify(d)
+
+
+@app.route('/api/archives/<aid>', methods=['PUT'])
+@_require_auth
+@_require_section('archives')
+def update_archive(aid):
+    b = request.get_json(force=True) or {}
+    title = str(b.get('title', '')).strip()
+    topic = str(b.get('topic', '')).strip()
+    content_description = str(b.get('content_description', '')).strip()
+    author = str(b.get('author', '')).strip()
+    body = str(b.get('body', ''))
+    tag_names = b.get('tags', [])
+
+    if not content_description:
+        return jsonify({'error': '内容描述及链接不能为空'}), 400
+    if len(title) > MAX_TITLE_LENGTH:
+        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+    if len(body) > MAX_CONTENT_SIZE:
+        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
+
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM archives WHERE id = ?', (aid,)).fetchone()
+        if not row:
+            return jsonify({'error': '归档不存在'}), 404
+
+        if topic:
+            _ensure_topic(db, topic)
+        _ensure_tags(db, tag_names)
+        db.execute(
+            '''UPDATE archives SET title=?, topic=?, content_description=?, author=?, body=?,
+               updated_at=? WHERE id=?''',
+            (title, topic, content_description, author, body, now, aid)
+        )
+        _set_archive_tags(db, aid, tag_names)
+        db.commit()
+        tags = _archive_tags(db, aid)
+        row = db.execute('SELECT * FROM archives WHERE id = ?', (aid,)).fetchone()
+
+    d = _archive_to_dict(row, tags)
+    d['avg_rating'] = _archive_avg_rating(db, aid)
+    d['documents'] = _archive_documents(db, aid)
+    return jsonify({'status': 'ok', 'archive': d})
+
+
+@app.route('/api/archives/<aid>', methods=['DELETE'])
+@_require_auth
+@_require_section('archives')
+def delete_archive(aid):
+    with _lock:
+        db = _get_db()
+        docs = db.execute('SELECT filename FROM archive_documents WHERE archive_id = ?', (aid,)).fetchall()
+        for doc in docs:
+            try:
+                os.remove(os.path.join(DOCUMENTS_DIR, doc['filename']))
+            except OSError:
+                pass
+        db.execute('DELETE FROM archive_tags WHERE archive_id = ?', (aid,))
+        db.execute('DELETE FROM archive_documents WHERE archive_id = ?', (aid,))
+        db.execute('DELETE FROM archive_comments WHERE archive_id = ?', (aid,))
+        db.execute('DELETE FROM archive_questions WHERE archive_id = ?', (aid,))
+        db.execute('DELETE FROM archive_ratings WHERE archive_id = ?', (aid,))
+        db.execute('DELETE FROM archives WHERE id = ?', (aid,))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 归档文档 API ─────────────────────────────────────────────────────────────
+@app.route('/api/archives/<aid>/documents', methods=['POST'])
+@_require_auth
+@_require_section('archives')
+def upload_archive_document(aid):
+    if 'document' not in request.files:
+        return jsonify({'error': '未找到文件'}), 400
+    f = request.files['document']
+    if not f.filename:
+        return jsonify({'error': '文件名为空'}), 400
+
+    ext = f.filename.rsplit('.', 1)[-1].lower() if '.' in f.filename else ''
+    if ext not in ALLOWED_DOC_EXTS:
+        return jsonify({'error': f'不支持的文件格式: {ext}'}), 400
+
+    data = f.read()
+    if len(data) > MAX_DOC_SIZE:
+        return jsonify({'error': '文件过大（最大 2MB）'}), 400
+
+    ts = datetime.now().strftime('%Y%m%d%H%M%S')
+    rand = uuid.uuid4().hex[:6]
+    safe_filename = f'{ts}_{rand}.{ext}'
+    filepath = os.path.join(DOCUMENTS_DIR, safe_filename)
+
+    with open(filepath, 'wb') as out:
+        out.write(data)
+
+    doc_id = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO archive_documents (id, archive_id, filename, original_name, file_size, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (doc_id, aid, safe_filename, f.filename, len(data), now)
+        )
+        db.commit()
+
+    return jsonify({
+        'status': 'ok',
+        'document': {
+            'id': doc_id, 'filename': safe_filename, 'original_name': f.filename,
+            'file_size': len(data), 'url': f'/data/documents/{safe_filename}', 'created_at': now,
+        }
+    })
+
+
+@app.route('/api/archive-documents/<doc_id>', methods=['DELETE'])
+@_require_auth
+@_require_section('archives')
+def delete_archive_document(doc_id):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM archive_documents WHERE id = ?', (doc_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '文档不存在'}), 404
+        try:
+            os.remove(os.path.join(DOCUMENTS_DIR, row['filename']))
+        except OSError:
+            pass
+        db.execute('DELETE FROM archive_documents WHERE id = ?', (doc_id,))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
+# ── 归档评论 API ─────────────────────────────────────────────────────────────
+@app.route('/api/archives/<aid>/comments', methods=['GET'])
+@_require_auth
+@_require_section('archives')
+def list_archive_comments(aid):
+    db = _get_db()
+    rows = db.execute(
+        'SELECT * FROM archive_comments WHERE archive_id = ? ORDER BY created_at ASC', (aid,)
+    ).fetchall()
+    return jsonify([_archive_comment_to_dict(r) for r in rows])
+
+
+@app.route('/api/archives/<aid>/comments', methods=['POST'])
+@_require_auth
+@_require_section('archives')
+def create_archive_comment(aid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    parent_id = b.get('parent_id') or None
+    if not content:
+        return jsonify({'error': '评论内容不能为空'}), 400
+    cid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO archive_comments (id, archive_id, parent_id, content, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (cid, aid, parent_id, content, g.current_user, now)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM archive_comments WHERE id = ?', (cid,)).fetchone()
+    return jsonify(_archive_comment_to_dict(row))
+
+
+@app.route('/api/archive-comments/<cid>', methods=['DELETE'])
+@_require_auth
+@_require_section('archives')
+def delete_archive_comment(cid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT id FROM archive_comments WHERE id = ?', (cid,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        deleted_ids = _delete_thread_rows(db, 'archive_comments', cid)
+        db.commit()
+    return jsonify({'status': 'ok', 'deleted': len(deleted_ids)})
+
+
+# ── 归档提问 API ─────────────────────────────────────────────────────────────
+@app.route('/api/archives/<aid>/questions', methods=['GET'])
+@_require_auth
+@_require_section('archives')
+def list_archive_questions(aid):
+    db = _get_db()
+    rows = db.execute(
+        'SELECT * FROM archive_questions WHERE archive_id = ? ORDER BY created_at ASC', (aid,)
+    ).fetchall()
+    return jsonify([_archive_question_to_dict(r) for r in rows])
+
+
+@app.route('/api/archives/<aid>/questions', methods=['POST'])
+@_require_auth
+@_require_section('archives')
+def create_archive_question(aid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    parent_id = b.get('parent_id') or None
+    if not content:
+        return jsonify({'error': '问题内容不能为空'}), 400
+    qid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO archive_questions (id, archive_id, parent_id, content, created_by, resolved, created_at) VALUES (?, ?, ?, ?, ?, 0, ?)',
+            (qid, aid, parent_id, content, g.current_user, now)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM archive_questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_archive_question_to_dict(row))
+
+
+@app.route('/api/archive-questions/<qid>/toggle-resolved', methods=['POST'])
+@_require_auth
+@_require_section('archives')
+def toggle_archive_question_resolved(qid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM archive_questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        new_val = 0 if row['resolved'] else 1
+        db.execute('UPDATE archive_questions SET resolved = ? WHERE id = ?', (new_val, qid))
+        db.commit()
+        row = db.execute('SELECT * FROM archive_questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_archive_question_to_dict(row))
+
+
+@app.route('/api/archive-questions/<qid>', methods=['DELETE'])
+@_require_auth
+@_require_section('archives')
+def delete_archive_question(qid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT id FROM archive_questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        deleted_ids = _delete_thread_rows(db, 'archive_questions', qid)
+        db.commit()
+    return jsonify({'status': 'ok', 'deleted': len(deleted_ids)})
+
+
+# ── 归档评分 API ─────────────────────────────────────────────────────────────
+@app.route('/api/archives/<aid>/ratings', methods=['GET'])
+@_require_auth
+@_require_section('archives')
+def list_archive_ratings(aid):
+    db = _get_db()
+    rows = db.execute(
+        'SELECT * FROM archive_ratings WHERE archive_id = ? ORDER BY created_at DESC', (aid,)
+    ).fetchall()
+    return jsonify([_archive_rating_to_dict(r) for r in rows])
+
+
+@app.route('/api/archives/<aid>/ratings', methods=['POST'])
+@_require_auth
+@_require_section('archives')
+def create_archive_rating(aid):
+    b = request.get_json(force=True) or {}
+    rating = int(b.get('rating', 0))
+    if rating < 1 or rating > 5:
+        return jsonify({'error': '评分必须在1-5之间'}), 400
+    rid = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
+    with _lock:
+        db = _get_db()
+        db.execute(
+            'INSERT INTO archive_ratings (id, archive_id, rating, created_by, created_at) VALUES (?, ?, ?, ?, ?)',
+            (rid, aid, rating, g.current_user, now)
+        )
+        db.commit()
+        row = db.execute('SELECT * FROM archive_ratings WHERE id = ?', (rid,)).fetchone()
+    return jsonify(_archive_rating_to_dict(row))
+
+
+@app.route('/api/archive-ratings/<rid>', methods=['DELETE'])
+@_require_auth
+@_require_section('archives')
+def delete_archive_rating(rid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT id FROM archive_ratings WHERE id = ?', (rid,)).fetchone()
+        if not row:
+            return jsonify({'error': '评分记录不存在'}), 404
+        db.execute('DELETE FROM archive_ratings WHERE id = ?', (rid,))
+        db.commit()
+    return jsonify({'status': 'ok'})
+
+
 # ── 启动 ─────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
     os.makedirs(DATA, exist_ok=True)
     os.makedirs(IMAGES_DIR, exist_ok=True)
+    os.makedirs(DOCUMENTS_DIR, exist_ok=True)
     with app.app_context():
         _init_db()
     app.run(debug=True, port=3006)
 else:
     os.makedirs(DATA, exist_ok=True)
     os.makedirs(IMAGES_DIR, exist_ok=True)
+    os.makedirs(DOCUMENTS_DIR, exist_ok=True)
     with app.app_context():
         _init_db()

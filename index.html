@@ -875,6 +875,9 @@ button {
 }
 .badge-type.opinion { background: #fef3c7; color: #92400e; }
 .badge-type.prediction { background: #dbeafe; color: #1e40af; }
+.badge-type.fact { background: #d1fae5; color: #065f46; }
+.badge-type.rebuttal { background: #fce7f3; color: #9d174d; }
+.badge-type.plan { background: #ede9fe; color: #5b21b6; }
 .badge-creator {
   background: #f3e8ff;
   color: #7c3aed;
@@ -964,6 +967,104 @@ button {
   color: var(--pri);
   font-weight: 600;
 }
+
+/* ── Archive views ────────────────────────────────────────────────────── */
+#view-archives-list {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+#view-archives-form {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+#view-archives-detail {
+  padding: calc(var(--nav-h) + 28px) 24px 28px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── Permission modal ─────────────────────────────────────────────────── */
+.perm-user-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--bdr);
+  flex-wrap: wrap;
+}
+.perm-user-row:last-child { border-bottom: none; }
+.perm-username {
+  font-weight: 600;
+  font-size: 0.9rem;
+  min-width: 100px;
+}
+.perm-role-badge {
+  font-size: 0.72rem;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #eef0fd;
+  color: var(--pri);
+}
+.perm-checks {
+  display: flex;
+  gap: 14px;
+  margin-left: auto;
+}
+.perm-checks label {
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+/* ── Document list ────────────────────────────────────────────────────── */
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+}
+.doc-item a {
+  color: var(--pri);
+  text-decoration: none;
+  font-weight: 500;
+}
+.doc-item a:hover { text-decoration: underline; }
+.doc-item .doc-size {
+  color: var(--sub);
+  font-size: 0.78rem;
+}
+.doc-item .btn-delete-doc {
+  margin-left: auto;
+  font-size: 0.76rem;
+  padding: 2px 10px;
+  border-radius: 6px;
+  background: #fff5f5;
+  color: #e53e3e;
+  border: 1px solid #fed7d7;
+}
+.doc-item .btn-delete-doc:hover {
+  background: #ffe5e5;
+  color: #c53030;
+}
+
+/* ── Archive card badge ───────────────────────────────────────────────── */
+.badge-author {
+  background: #fff7ed;
+  color: #c2410c;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
 </style>
 </head>
 <body>
@@ -973,10 +1074,12 @@ button {
   <span class="brand">Lin的笔记</span>
   <div class="nav-tabs" id="nav-tabs" style="display:none;">
     <button class="nav-tab active" id="nav-tab-notes" data-tab="notes">笔记</button>
-    <button class="nav-tab" id="nav-tab-opinions" data-tab="opinions">观点与预测</button>
+    <button class="nav-tab" id="nav-tab-opinions" data-tab="opinions">观点库</button>
+    <button class="nav-tab" id="nav-tab-archives" data-tab="archives">归档</button>
   </div>
   <span class="spacer"></span>
   <div class="account-box">
+    <button class="btn-ghost" id="btn-permissions" style="display:none;">调整权限</button>
     <span id="auth-user-label">未登录</span>
     <button class="btn-ghost" id="btn-logout" style="display:none;">退出登录</button>
   </div>
@@ -999,6 +1102,18 @@ button {
       <button class="btn-primary" id="btn-login">登录</button>
     </div>
     <div id="login-msg"></div>
+  </div>
+</div>
+
+<!-- ── Permissions Modal ──────────────────────────────────────────────── -->
+<div id="permissions-overlay" class="auth-overlay" style="display:none;">
+  <div class="auth-card" style="max-width:560px;">
+    <h3>调整权限</h3>
+    <p>勾选用户可以访问的功能模块</p>
+    <div id="permissions-list"></div>
+    <div class="auth-actions" style="margin-top:16px;">
+      <button class="btn-primary" id="btn-permissions-close">关闭</button>
+    </div>
   </div>
 </div>
 
@@ -1145,30 +1260,35 @@ button {
 <!-- ── View: Opinions List ──────────────────────────────────────────────── -->
 <div id="view-opinions-list" class="page">
   <div class="list-header">
-    <h2>观点与预测</h2>
+    <h2>观点库</h2>
     <button class="btn-primary" id="btn-add-opinion">+ 添加</button>
   </div>
 
   <div class="filter-bar">
     <select id="op-filter-type">
       <option value="">全部类型</option>
+      <option value="事实">事实</option>
       <option value="观点">观点</option>
+      <option value="反驳">反驳</option>
       <option value="预测">预测</option>
+      <option value="计划">计划</option>
     </select>
     <select id="op-filter-creator">
       <option value="">所有创建人</option>
     </select>
     <select id="op-filter-predictor">
-      <option value="">所有预测人</option>
+      <option value="">所有相关人</option>
     </select>
     <select id="op-filter-sort">
       <option value="updated_desc">最近修改</option>
       <option value="created_desc">最新创建</option>
       <option value="created_asc">最早创建</option>
-      <option value="rating_desc">准确性/质量 高→低</option>
-      <option value="rating_asc">准确性/质量 低→高</option>
+      <option value="rating_desc">评分 高→低</option>
+      <option value="rating_asc">评分 低→高</option>
       <option value="measure_time_desc">衡量时间 新→旧</option>
       <option value="measure_time_asc">衡量时间 旧→新</option>
+      <option value="verify_priority_desc">验证优先级 高→低</option>
+      <option value="verify_priority_asc">验证优先级 低→高</option>
     </select>
   </div>
 
@@ -1186,8 +1306,11 @@ button {
   <div class="form-row">
     <div class="section-label">类型 *</div>
     <div class="type-selector" id="op-type-selector">
+      <button type="button" class="type-btn" data-type="事实">事实</button>
       <button type="button" class="type-btn active" data-type="观点">观点</button>
+      <button type="button" class="type-btn" data-type="反驳">反驳</button>
       <button type="button" class="type-btn" data-type="预测">预测</button>
+      <button type="button" class="type-btn" data-type="计划">计划</button>
     </div>
   </div>
 
@@ -1204,10 +1327,10 @@ button {
     <div id="op-title-preview" class="render-box title-preview-box"><span class="empty-hint">标题实时预览</span></div>
   </div>
 
-  <!-- Predictor -->
-  <div class="form-row">
-    <div class="section-label">预测人</div>
-    <input type="text" id="op-predictor" class="full-width" placeholder="预测人（默认为当前用户）" style="width:100%;">
+  <!-- Predictor / Rebuttor / Planner (conditional) -->
+  <div class="form-row" id="op-predictor-row" style="display:none;">
+    <div class="section-label" id="op-predictor-label">预测人</div>
+    <input type="text" id="op-predictor" class="full-width" placeholder="（默认为当前用户）" style="width:100%;">
   </div>
 
   <!-- Time Scale (prediction only) -->
@@ -1220,12 +1343,49 @@ button {
     </div>
   </div>
 
+  <!-- Rebutted Opinion (反驳 only) -->
+  <div class="form-row" id="op-rebutted-opinion-row" style="display:none;">
+    <div class="section-label">被反驳观点</div>
+    <input type="text" id="op-rebutted-opinion" class="full-width" placeholder="输入被反驳的观点" style="width:100%;">
+  </div>
+
+  <!-- Rebutted Source (反驳 only) -->
+  <div class="form-row" id="op-rebutted-source-row" style="display:none;">
+    <div class="section-label">被反驳观点出处</div>
+    <input type="text" id="op-rebutted-source" class="full-width" placeholder="输入被反驳观点的出处" style="width:100%;">
+  </div>
+
+  <!-- Fact Source (事实 only) -->
+  <div class="form-row" id="op-fact-source-row" style="display:none;">
+    <div class="section-label">事实出处描述 *</div>
+    <input type="text" id="op-fact-source" class="full-width" placeholder="描述事实出处（必填）" style="width:100%;">
+  </div>
+
+  <!-- Fact Link (事实 only) -->
+  <div class="form-row" id="op-fact-link-row" style="display:none;">
+    <div class="section-label">有关网页链接</div>
+    <input type="text" id="op-fact-link" class="full-width" placeholder="相关网页链接（可选）" style="width:100%;">
+  </div>
+
+  <!-- Verify Priority (事实 only) -->
+  <div class="form-row" id="op-verify-priority-row" style="display:none;">
+    <div class="section-label">待验证优先级</div>
+    <div class="stars-input" id="op-verify-priority-stars">
+      <button type="button" class="star-btn" data-val="1">★</button>
+      <button type="button" class="star-btn" data-val="2">★</button>
+      <button type="button" class="star-btn" data-val="3">★</button>
+      <button type="button" class="star-btn" data-val="4">★</button>
+      <button type="button" class="star-btn" data-val="5">★</button>
+    </div>
+  </div>
+
   <!-- Content Editor -->
   <div class="form-row">
     <div class="section-label">正文</div>
-    <textarea id="op-editor-md" placeholder="在此输入内容...&#10;&#10;支持 Markdown 和 LaTeX 公式" style="width:100%;min-height:200px;"></textarea>
-    <div class="section-label" style="margin-top:10px;">正文预览</div>
-    <div id="op-content-preview" class="render-box" style="min-height:60px;"><span class="empty-hint">正文实时预览</span></div>
+    <div id="op-editor-vditor-shell" class="vditor-shell">
+      <div id="op-editor-vditor"></div>
+    </div>
+    <textarea id="op-editor-md" style="display:none;" placeholder="在此输入内容...&#10;&#10;支持 Markdown 和 LaTeX 公式"></textarea>
   </div>
 
   <!-- Save -->
@@ -1296,6 +1456,151 @@ button {
   </div>
 </div>
 
+<!-- ── View: Archive List ────────────────────────────────────────────── -->
+<div id="view-archives-list" class="page">
+  <div class="list-header">
+    <h2>归档</h2>
+    <button class="btn-primary" id="btn-add-archive">+ 添加归档</button>
+  </div>
+  <div class="filter-bar">
+    <select id="arc-filter-topic"><option value="">所有主题</option></select>
+    <select id="arc-filter-tag"><option value="">所有标签</option></select>
+    <select id="arc-filter-sort">
+      <option value="updated_desc">最近修改</option>
+      <option value="created_desc">最新创建</option>
+      <option value="created_asc">最早创建</option>
+      <option value="rating_desc">评分 高→低</option>
+      <option value="rating_asc">评分 低→高</option>
+    </select>
+  </div>
+  <div id="archive-list"></div>
+</div>
+
+<!-- ── View: Archive Form ────────────────────────────────────────────── -->
+<div id="view-archives-form" class="page">
+  <div class="form-header">
+    <button class="btn-ghost" id="btn-back-to-arc-list">← 返回</button>
+    <h2 id="arc-form-title-label">添加归档</h2>
+  </div>
+
+  <div class="form-row">
+    <div class="section-label">标题</div>
+    <input type="text" id="arc-title" class="full-width" placeholder="输入标题（可选）" style="width:100%;">
+  </div>
+
+  <div class="form-row">
+    <div class="section-label">主题</div>
+    <div class="topic-selector">
+      <div class="topic-levels" id="arc-topic-levels"></div>
+      <div class="topic-new-row" id="arc-topic-new-row" style="display:none;">
+        <input type="text" id="arc-new-topic-input" placeholder="输入新主题名称（用 / 分隔子级）">
+        <button class="btn-ghost" id="btn-arc-topic-commit-level" type="button">确认并继续下一级</button>
+      </div>
+      <div class="topic-hint" id="arc-topic-hint"></div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="section-label">标签</div>
+    <div class="tag-selector" id="arc-tag-selector">
+      <div class="tag-selector-input" id="arc-tag-selector-input">
+        <input type="text" class="tag-input-inner" id="arc-tag-input" placeholder="输入或选择标签...">
+      </div>
+      <div class="tag-dropdown" id="arc-tag-dropdown"></div>
+    </div>
+  </div>
+
+  <div class="form-row">
+    <div class="section-label">作者</div>
+    <input type="text" id="arc-author" class="full-width" placeholder="输入作者（可选）" style="width:100%;">
+  </div>
+
+  <div class="form-row">
+    <div class="section-label">内容描述及链接 <span style="color:#e53e3e;">*</span></div>
+    <div id="arc-desc-vditor-shell" class="vditor-shell">
+      <div id="arc-desc-vditor"></div>
+    </div>
+    <textarea id="arc-content-description" style="display:none;" placeholder=""></textarea>
+  </div>
+
+  <div class="form-row">
+    <div class="section-label">文档上传</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+      <button type="button" class="btn-ghost" id="btn-arc-upload-doc">选择文件</button>
+      <input type="file" id="arc-doc-input" multiple style="display:none;">
+      <span style="font-size:0.8rem;color:var(--sub);">单个文件最大 2MB</span>
+    </div>
+    <div id="arc-doc-list" style="margin-top:8px;"></div>
+    <span id="arc-doc-msg" style="font-size:0.82rem;"></span>
+  </div>
+
+  <div class="form-actions" style="display:flex;gap:12px;align-items:center;">
+    <button class="btn-primary" id="btn-save-archive">保存</button>
+    <button class="btn-ghost" id="btn-save-archive-open" type="button">保存并查看</button>
+    <span id="arc-form-msg"></span>
+  </div>
+</div>
+
+<!-- ── View: Archive Detail ──────────────────────────────────────────── -->
+<div id="view-archives-detail" class="page">
+  <div class="detail-back">
+    <button class="btn-ghost" id="btn-back-from-arc-detail">← 返回列表</button>
+  </div>
+  <div class="detail-header">
+    <div class="detail-title" id="arc-detail-title"></div>
+    <div class="detail-meta" id="arc-detail-meta"></div>
+  </div>
+  <div class="detail-actions" style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn-primary" id="btn-edit-archive">编辑</button>
+    <button class="btn-danger" id="btn-delete-archive">删除</button>
+  </div>
+
+
+  <div id="arc-detail-docs-section" style="margin-bottom:16px;display:none;">
+    <div class="section-label">文档</div>
+    <div id="arc-detail-docs"></div>
+  </div>
+
+  <!-- Rating Section -->
+  <div class="rating-section" id="arc-rating-section">
+    <h4>内容质量</h4>
+    <div class="rating-row">
+      <label>评分 (1-5星):</label>
+      <div class="stars-input" id="arc-rating-stars">
+        <button type="button" class="star-btn" data-val="1">★</button>
+        <button type="button" class="star-btn" data-val="2">★</button>
+        <button type="button" class="star-btn" data-val="3">★</button>
+        <button type="button" class="star-btn" data-val="4">★</button>
+        <button type="button" class="star-btn" data-val="5">★</button>
+      </div>
+    </div>
+    <div class="rating-row">
+      <button class="btn-primary" id="btn-submit-arc-rating">提交评分</button>
+    </div>
+    <div id="arc-rating-history" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- Comments Section -->
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>评论</h3>
+      <button class="cq-add-btn" id="btn-add-arc-comment">+ 添加评论</button>
+    </div>
+    <div id="arc-comment-input-area"></div>
+    <div id="arc-comment-list"></div>
+  </div>
+
+  <!-- Questions Section -->
+  <div class="cq-section">
+    <div class="cq-section-header">
+      <h3>问题</h3>
+      <button class="cq-add-btn" id="btn-add-arc-question">+ 添加问题</button>
+    </div>
+    <div id="arc-question-input-area"></div>
+    <div id="arc-question-list"></div>
+  </div>
+</div>
+
 <!-- ── Floating KaTeX Preview ──────────────────────────────────────────── -->
 <div id="float-preview">
   <div id="fp-header">
@@ -1330,7 +1635,7 @@ const KATEX_OPTS = {
 };
 
 const AUTH_KEY = 'lin-notes-auth';
-let authState = { token: '', username: '', role: '' };
+let authState = { token: '', username: '', role: '', permissions: [] };
 
 let allNotes = [];
 let allTopics = [];
@@ -1355,6 +1660,22 @@ let editingOpinionId = null;
 let viewingOpinionId = null;
 let currentOpType = '观点';
 let currentOpRating = 0;
+let currentVerifyPriority = 0;
+let opVditor = null;
+let opVditorInitStarted = false;
+let opVditorPendingValue = '';
+
+// Archives state
+let allArchives = [];
+let editingArchiveId = null;
+let viewingArchiveId = null;
+let arcSelectedTags = [];
+let currentArcRating = 0;
+let arcDescVditor = null;
+let arcDescVditorInitStarted = false;
+let arcDescVditorPendingValue = '';
+let arcTopicFormState = { segments: [], pendingNewDepth: null };
+let arcPendingDocs = []; // docs uploaded during creation before save
 
 /* ════════════════════════════════════════════════════════════════════════
    Utilities
@@ -1465,6 +1786,120 @@ function ensureNoteVditor() {
     toggleNoteEditorMode(false);
     console.error('Vditor 初始化失败:', e);
   }
+}
+
+// ── Opinion Vditor ──
+function ensureOpVditor() {
+  const shell = $('op-editor-vditor-shell');
+  if (opVditor) {
+    if (shell) shell.classList.add('active');
+    if (typeof opVditor.resize === 'function') {
+      setTimeout(() => { try { opVditor.resize(); } catch (e) {} }, 0);
+    }
+    return;
+  }
+  if (opVditorInitStarted) return;
+  if (typeof window.Vditor !== 'function') return;
+
+  opVditorInitStarted = true;
+  try {
+    opVditor = new Vditor('op-editor-vditor', {
+      mode: 'wysiwyg',
+      height: 400,
+      cdn: '/vendor/vditor',
+      cache: { enable: false },
+      preview: {
+        math: { engine: 'KaTeX' },
+      },
+      input(value) {
+        $('op-editor-md').value = value;
+      },
+      after() {
+        if (shell) shell.classList.add('active');
+        try {
+          opVditor.setValue(opVditorPendingValue || $('op-editor-md').value || '');
+        } catch (e) {}
+      },
+    });
+  } catch (e) {
+    opVditor = null;
+    opVditorInitStarted = false;
+    console.error('Opinion Vditor 初始化失败:', e);
+  }
+}
+
+function getOpEditorValue() {
+  if (opVditor && typeof opVditor.getValue === 'function') {
+    try { return opVditor.getValue(); } catch (e) {}
+  }
+  return $('op-editor-md').value;
+}
+
+function setOpEditorValue(text) {
+  text = String(text || '');
+  opVditorPendingValue = text;
+  $('op-editor-md').value = text;
+  if (opVditor && typeof opVditor.setValue === 'function') {
+    try { opVditor.setValue(text); } catch (e) {}
+  }
+}
+
+// ── Archive Content Description Vditor ──
+function ensureArcDescVditor() {
+  const shell = $('arc-desc-vditor-shell');
+  if (arcDescVditor) {
+    if (shell) shell.classList.add('active');
+    return;
+  }
+  if (arcDescVditorInitStarted) return;
+  if (typeof window.Vditor !== 'function') return;
+  arcDescVditorInitStarted = true;
+  try {
+    arcDescVditor = new Vditor('arc-desc-vditor', {
+      mode: 'wysiwyg',
+      height: 200,
+      cdn: '/vendor/vditor',
+      cache: { enable: false },
+      preview: { math: { engine: 'KaTeX' } },
+      input(value) { $('arc-content-description').value = value; },
+      after() {
+        if (shell) shell.classList.add('active');
+        try { arcDescVditor.setValue(arcDescVditorPendingValue || $('arc-content-description').value || ''); } catch (e) {}
+      },
+    });
+  } catch (e) {
+    arcDescVditor = null;
+    arcDescVditorInitStarted = false;
+  }
+}
+
+function getArcDescValue() {
+  if (arcDescVditor && typeof arcDescVditor.getValue === 'function') {
+    try { return arcDescVditor.getValue(); } catch (e) {}
+  }
+  return $('arc-content-description').value;
+}
+
+function setArcDescValue(text) {
+  text = String(text || '');
+  arcDescVditorPendingValue = text;
+  $('arc-content-description').value = text;
+  if (arcDescVditor && typeof arcDescVditor.setValue === 'function') {
+    try { arcDescVditor.setValue(text); } catch (e) {}
+  }
+}
+
+function autoLinkUrls(text) {
+  return escapeHtml(text).replace(
+    /(https?:\/\/[^\s<>"']+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+  );
+}
+
+function formatFileSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
 function formatTime(iso) {
@@ -1691,7 +2126,7 @@ function persistAuthState() {
 }
 
 function clearAuthState() {
-  authState = { token: '', username: '', role: '' };
+  authState = { token: '', username: '', role: '', permissions: [] };
   localStorage.removeItem(AUTH_KEY);
   setLoggedInUI(false);
 }
@@ -1703,11 +2138,16 @@ function setLoggedInUI(loggedIn) {
 
   const navTabs = $('nav-tabs');
   const isAdmin = authState.role === 'admin';
+  const perms = authState.permissions || [];
   if (loggedIn) {
     navTabs.style.display = '';
-    $('nav-tab-notes').style.display = isAdmin ? '' : 'none';
+    $('nav-tab-notes').style.display = perms.includes('notes') ? '' : 'none';
+    $('nav-tab-opinions').style.display = perms.includes('opinions') ? '' : 'none';
+    $('nav-tab-archives').style.display = perms.includes('archives') ? '' : 'none';
+    $('btn-permissions').style.display = isAdmin ? '' : 'none';
   } else {
     navTabs.style.display = 'none';
+    $('btn-permissions').style.display = 'none';
   }
 }
 
@@ -1747,16 +2187,29 @@ async function doLogin() {
     authState.token = data.token;
     authState.username = data.username;
     authState.role = data.role || 'user';
+    authState.permissions = data.permissions || [];
     persistAuthState();
     setLoggedInUI(true);
-    if (authState.role === 'admin') {
-      loadAllData();
-    } else {
-      loadOpinions();
-      switchToSection('opinions');
-    }
+    loginNavigate();
   } catch(e) {
     showMsg('login-msg', '网络错误', 'err');
+  }
+}
+
+function loginNavigate() {
+  const perms = authState.permissions || [];
+  // Always load topics and tags for filters
+  loadTopics();
+  loadTags();
+  if (perms.includes('notes')) {
+    loadAllData();
+    switchToSection('notes');
+  } else if (perms.includes('opinions')) {
+    loadOpinions();
+    switchToSection('opinions');
+  } else if (perms.includes('archives')) {
+    loadArchives();
+    switchToSection('archives');
   }
 }
 
@@ -1771,14 +2224,10 @@ async function restoreSession() {
     if (res.ok) {
       const data = await res.json();
       authState.role = data.role || authState.role || 'user';
+      authState.permissions = data.permissions || authState.permissions || [];
       persistAuthState();
       setLoggedInUI(true);
-      if (authState.role === 'admin') {
-        loadAllData();
-      } else {
-        loadOpinions();
-        switchToSection('opinions');
-      }
+      loginNavigate();
     } else {
       clearAuthState();
     }
@@ -1798,15 +2247,22 @@ function showView(name) {
   $('view-opinions-list').classList.toggle('active', name === 'opinions-list');
   $('view-opinions-form').classList.toggle('active', name === 'opinions-form');
   $('view-opinions-detail').classList.toggle('active', name === 'opinions-detail');
+  $('view-archives-list').classList.toggle('active', name === 'archives-list');
+  $('view-archives-form').classList.toggle('active', name === 'archives-form');
+  $('view-archives-detail').classList.toggle('active', name === 'archives-detail');
   if (name === 'form') ensureNoteVditor();
+  if (name === 'opinions-form') ensureOpVditor();
+  if (name === 'archives-form') ensureArcDescVditor();
   window.scrollTo(0, 0);
 }
 
 function switchToSection(section) {
-  // section: 'notes' or 'opinions'
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === section));
   if (section === 'notes') {
     showView('list');
+  } else if (section === 'archives') {
+    loadArchives();
+    showView('archives-list');
   } else {
     loadOpinions();
     showView('opinions-list');
@@ -2183,7 +2639,7 @@ async function loadNotes() {
    Selectors
    ════════════════════════════════════════════════════════════════════════ */
 function fillTopicSelectors() {
-  // Filter
+  // Note filter
   const fSel = $('filter-topic');
   const fVal = fSel.value;
   fSel.innerHTML = '<option value="">所有主题</option>';
@@ -2192,8 +2648,11 @@ function fillTopicSelectors() {
   });
   fSel.value = fVal;
 
-  // Form
+  // Note form
   renderTopicFormSelector();
+
+  // Archive filter
+  populateArcFilters();
 }
 
 function fillTagFilter() {
@@ -2204,6 +2663,9 @@ function fillTagFilter() {
     sel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(t.name) + '</option>';
   });
   sel.value = val;
+
+  // Archive filter
+  populateArcFilters();
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -2990,7 +3452,7 @@ async function loadOpinionFilterOptions() {
 
     const predictorSel = $('op-filter-predictor');
     const predictorVal = predictorSel.value;
-    predictorSel.innerHTML = '<option value="">所有预测人</option>';
+    predictorSel.innerHTML = '<option value="">所有相关人</option>';
     (data.predictors || []).forEach(p => {
       predictorSel.innerHTML += '<option value="' + escapeHtml(p) + '">' + escapeHtml(p) + '</option>';
     });
@@ -3001,30 +3463,41 @@ async function loadOpinionFilterOptions() {
 function renderOpinionList() {
   const container = $('opinion-list');
   if (allOpinions.length === 0) {
-    container.innerHTML = '<div class="empty-hint">暂无观点或预测，点击"添加"开始记录</div>';
+    container.innerHTML = '<div class="empty-hint">暂无记录，点击"添加"开始记录</div>';
     return;
   }
 
+  const typeClassMap = { '事实': 'fact', '观点': 'opinion', '反驳': 'rebuttal', '预测': 'prediction', '计划': 'plan' };
+  const personLabels = { '预测': '预测人', '反驳': '反驳人', '计划': '计划人' };
+  const ratingLabels = { '预测': '预测准确性', '观点': '观点质量', '事实': '事实可信度', '计划': '计划完成度', '反驳': '评分' };
+
   container.innerHTML = allOpinions.map(op => {
-    const isP = op.type === '预测';
-    const typeClass = isP ? 'prediction' : 'opinion';
+    const typeClass = typeClassMap[op.type] || 'opinion';
 
     let extraHtml = '<span class="badge-creator">创建人: ' + escapeHtml(op.created_by) + '</span>';
-    if (op.predictor) extraHtml += '<span class="badge-creator">预测人: ' + escapeHtml(op.predictor) + '</span>';
-    if (!isP && op.avg_rating) {
-      extraHtml += '<span>观点质量: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
+    if (op.predictor) {
+      const personLabel = personLabels[op.type] || '相关人';
+      extraHtml += '<span class="badge-creator">' + personLabel + ': ' + escapeHtml(op.predictor) + '</span>';
     }
-    if (isP) {
+
+    if (op.type === '预测') {
       if (op.time_scale) extraHtml += '<span>时间尺度: ' + escapeHtml(op.time_scale) + '</span>';
       if (op.avg_rating) extraHtml += '<span>预测准确性: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
       if (op.measure_time) extraHtml += '<span>衡量时间: ' + escapeHtml(op.measure_time) + '</span>';
+    } else if (op.type === '事实') {
+      if (op.verify_priority) extraHtml += '<span>验证优先级: ' + renderStars(op.verify_priority) + '</span>';
+      if (op.avg_rating) extraHtml += '<span>事实可信度: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
+    } else if (op.type === '计划') {
+      if (op.avg_rating) extraHtml += '<span>计划完成度: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
+    } else if (op.type === '观点') {
+      if (op.avg_rating) extraHtml += '<span>观点质量: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
     }
 
     return '<div class="note-card" data-opinion-id="' + op.id + '">' +
       '<div class="note-card-title" data-katex>' + escapeHtml(op.title || '(无标题)') + '</div>' +
       '<div class="note-card-meta">' +
         '<span class="badge-type ' + typeClass + '">' + escapeHtml(op.type) + '</span>' +
-        '<span class="badge-topic">' + escapeHtml(formatTopicLabel(op.topic)) + '</span>' +
+        (op.topic ? '<span class="badge-topic">' + escapeHtml(formatTopicLabel(op.topic)) + '</span>' : '') +
         extraHtml +
         '<span>' + formatTime(op.created_at) + '</span>' +
       '</div>' +
@@ -3042,7 +3515,7 @@ function renderOpinionList() {
 
 function openOpinionCreateForm() {
   editingOpinionId = null;
-  $('op-form-title-label').textContent = '添加观点/预测';
+  $('op-form-title-label').textContent = '添加记录';
   $('op-title').value = '';
   $('op-title-preview').innerHTML = '<span class="empty-hint">标题实时预览</span>';
   $('op-subtopic').value = '';
@@ -3050,18 +3523,46 @@ function openOpinionCreateForm() {
   $('op-ts-year').value = '';
   $('op-ts-month').value = '';
   $('op-ts-day').value = '';
-  $('op-editor-md').value = '';
-  $('op-content-preview').innerHTML = '<span class="empty-hint">正文实时预览</span>';
+  $('op-rebutted-opinion').value = '';
+  $('op-rebutted-source').value = '';
+  $('op-fact-source').value = '';
+  $('op-fact-link').value = '';
+  currentVerifyPriority = 0;
+  updateVerifyPriorityStars();
+  setOpEditorValue('');
   currentOpType = '观点';
   updateOpTypeSelector();
   showView('opinions-form');
+}
+
+function updateVerifyPriorityStars() {
+  document.querySelectorAll('#op-verify-priority-stars .star-btn').forEach(btn => {
+    btn.classList.toggle('filled', parseInt(btn.dataset.val) <= currentVerifyPriority);
+  });
 }
 
 function updateOpTypeSelector() {
   document.querySelectorAll('#op-type-selector .type-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.type === currentOpType);
   });
+
+  // Predictor row: show for 预测, 反驳, 计划
+  const showPredictor = ['预测', '反驳', '计划'].includes(currentOpType);
+  $('op-predictor-row').style.display = showPredictor ? '' : 'none';
+  const predictorLabels = { '预测': '预测人', '反驳': '反驳人 *', '计划': '计划人' };
+  if (showPredictor) $('op-predictor-label').textContent = predictorLabels[currentOpType] || '预测人';
+
+  // Timescale: prediction only
   $('op-timescale-row').style.display = currentOpType === '预测' ? '' : 'none';
+
+  // Rebuttal fields
+  $('op-rebutted-opinion-row').style.display = currentOpType === '反驳' ? '' : 'none';
+  $('op-rebutted-source-row').style.display = currentOpType === '反驳' ? '' : 'none';
+
+  // Fact fields
+  $('op-fact-source-row').style.display = currentOpType === '事实' ? '' : 'none';
+  $('op-fact-link-row').style.display = currentOpType === '事实' ? '' : 'none';
+  $('op-verify-priority-row').style.display = currentOpType === '事实' ? '' : 'none';
 }
 
 function parseTimeScale(ts) {
@@ -3093,12 +3594,11 @@ async function openOpinionEditForm(oid) {
     if (!res.ok) return;
     const op = await res.json();
     editingOpinionId = oid;
-    $('op-form-title-label').textContent = '编辑观点/预测';
+    $('op-form-title-label').textContent = '编辑记录';
     currentOpType = op.type;
     updateOpTypeSelector();
 
-    const parts = splitTopicPath(op.topic);
-    $('op-subtopic').value = parts.length > 1 ? joinTopicPath(parts.slice(1)) : '';
+    $('op-subtopic').value = op.topic || '';
     $('op-title').value = op.title || '';
     renderOpTitlePreview(op.title || '');
     $('op-predictor').value = op.predictor || '';
@@ -3108,22 +3608,49 @@ async function openOpinionEditForm(oid) {
     $('op-ts-month').value = ts.month;
     $('op-ts-day').value = ts.day;
 
-    $('op-editor-md').value = op.content || '';
-    renderMarkdownKatex(op.content || '', $('op-content-preview'));
+    $('op-rebutted-opinion').value = op.rebutted_opinion || '';
+    $('op-rebutted-source').value = op.rebutted_source || '';
+    $('op-fact-source').value = op.fact_source || '';
+    $('op-fact-link').value = op.fact_link || '';
+    currentVerifyPriority = op.verify_priority || 0;
+    updateVerifyPriorityStars();
+
+    setOpEditorValue(op.content || '');
     showView('opinions-form');
   } catch(e) {}
 }
 
 async function saveOpinion(options = {}) {
   const navigateAfterSave = !!options.navigateAfterSave;
-  const subtopic = $('op-subtopic').value.trim();
-  const topic = subtopic ? (currentOpType + ' / ' + subtopic) : currentOpType;
+  const topic = $('op-subtopic').value.trim();
   const title = $('op-title').value.trim();
-  const content = $('op-editor-md').value;
+  const content = getOpEditorValue();
   const predictor = $('op-predictor').value.trim();
   const time_scale = currentOpType === '预测' ? buildTimeScale() : '';
+  const rebutted_opinion = $('op-rebutted-opinion').value.trim();
+  const rebutted_source = $('op-rebutted-source').value.trim();
+  const fact_source = $('op-fact-source').value.trim();
+  const fact_link = $('op-fact-link').value.trim();
+  const verify_priority = currentVerifyPriority;
 
-  const body = { type: currentOpType, topic, title, content, predictor, time_scale };
+  // Client-side validation
+  if (currentOpType === '反驳' && !content.trim()) {
+    showMsg('op-form-msg', '反驳类型必须填写正文', 'err');
+    return;
+  }
+  if (currentOpType === '反驳' && !predictor) {
+    showMsg('op-form-msg', '反驳类型必须填写反驳人', 'err');
+    return;
+  }
+  if (currentOpType === '事实' && !fact_source) {
+    showMsg('op-form-msg', '事实类型必须填写出处描述', 'err');
+    return;
+  }
+
+  const body = {
+    type: currentOpType, topic, title, content, predictor, time_scale,
+    rebutted_opinion, rebutted_source, fact_source, fact_link, verify_priority
+  };
   const url = editingOpinionId ? '/api/opinions/' + editingOpinionId : '/api/opinions';
   const method = editingOpinionId ? 'PUT' : 'POST';
 
@@ -3143,7 +3670,7 @@ async function saveOpinion(options = {}) {
     const savedId = (saved && saved.id) ? saved.id : editingOpinionId;
     if (!editingOpinionId && savedId) {
       editingOpinionId = savedId;
-      $('op-form-title-label').textContent = '编辑观点/预测';
+      $('op-form-title-label').textContent = '编辑记录';
     }
 
     showMsg('op-form-msg', '保存成功！', 'ok');
@@ -3173,23 +3700,44 @@ async function openOpinionDetail(oid) {
     renderMathInElement(titleEl, KATEX_OPTS);
 
     // Meta
-    const isP = op.type === '预测';
-    const typeClass = isP ? 'prediction' : 'opinion';
-    let metaHtml = '<span class="badge-type ' + typeClass + '">' + escapeHtml(op.type) + '</span>' +
-      '<span class="badge-topic">' + escapeHtml(formatTopicLabel(op.topic)) + '</span>' +
-      '<span class="badge-creator">创建人: ' + escapeHtml(op.created_by) + '</span>';
-    if (op.predictor) metaHtml += '<span class="badge-creator">预测人: ' + escapeHtml(op.predictor) + '</span>';
-    if (isP && op.time_scale) metaHtml += '<span>时间尺度: ' + escapeHtml(op.time_scale) + '</span>';
+    const typeClassMap = { '事实': 'fact', '观点': 'opinion', '反驳': 'rebuttal', '预测': 'prediction', '计划': 'plan' };
+    const personLabels = { '预测': '预测人', '反驳': '反驳人', '计划': '计划人' };
+    const typeClass = typeClassMap[op.type] || 'opinion';
+    let metaHtml = '<span class="badge-type ' + typeClass + '">' + escapeHtml(op.type) + '</span>';
+    if (op.topic) metaHtml += '<span class="badge-topic">' + escapeHtml(formatTopicLabel(op.topic)) + '</span>';
+    metaHtml += '<span class="badge-creator">创建人: ' + escapeHtml(op.created_by) + '</span>';
+    if (op.predictor) {
+      const personLabel = personLabels[op.type] || '相关人';
+      metaHtml += '<span class="badge-creator">' + personLabel + ': ' + escapeHtml(op.predictor) + '</span>';
+    }
+    if (op.type === '预测' && op.time_scale) metaHtml += '<span>时间尺度: ' + escapeHtml(op.time_scale) + '</span>';
+    if (op.type === '事实' && op.verify_priority) metaHtml += '<span>验证优先级: ' + renderStars(op.verify_priority) + '</span>';
     metaHtml += '<span>创建: ' + formatTime(op.created_at) + '</span>' +
       '<span>修改: ' + formatTime(op.updated_at) + '</span>';
     $('op-detail-meta').innerHTML = metaHtml;
 
-    // Body
-    renderMarkdownKatex(op.content || '', $('op-detail-body'));
+    // Body - show type-specific fields before content
+    let bodyPrefix = '';
+    if (op.type === '反驳') {
+      if (op.rebutted_opinion) bodyPrefix += '<p><strong>被反驳观点:</strong> ' + escapeHtml(op.rebutted_opinion) + '</p>';
+      if (op.rebutted_source) bodyPrefix += '<p><strong>被反驳观点出处:</strong> ' + escapeHtml(op.rebutted_source) + '</p>';
+      if (bodyPrefix) bodyPrefix += '<hr>';
+    }
+    if (op.type === '事实') {
+      if (op.fact_source) bodyPrefix += '<p><strong>事实出处:</strong> ' + escapeHtml(op.fact_source) + '</p>';
+      if (op.fact_link) bodyPrefix += '<p><strong>相关链接:</strong> <a href="' + escapeHtml(op.fact_link) + '" target="_blank" rel="noopener">' + escapeHtml(op.fact_link) + '</a></p>';
+      if (bodyPrefix) bodyPrefix += '<hr>';
+    }
+    const bodyEl = $('op-detail-body');
+    bodyEl.innerHTML = bodyPrefix;
+    const contentDiv = document.createElement('div');
+    renderMarkdownKatex(op.content || '', contentDiv);
+    bodyEl.appendChild(contentDiv);
 
     // Rating section
-    $('op-rating-label').textContent = isP ? '预测准确性' : '观点质量';
-    $('op-measure-time-row').style.display = isP ? '' : 'none';
+    const ratingLabels = { '预测': '预测准确性', '观点': '观点质量', '事实': '事实可信度', '计划': '计划完成度', '反驳': '评分' };
+    $('op-rating-label').textContent = ratingLabels[op.type] || '评分';
+    $('op-measure-time-row').style.display = op.type === '预测' ? '' : 'none';
     currentOpRating = 0;
     updateOpRatingStars();
     $('op-measure-time').value = '';
@@ -3487,6 +4035,610 @@ function renderOpTitlePreview(src) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   Permissions Modal
+   ════════════════════════════════════════════════════════════════════════ */
+async function openPermissionsModal() {
+  $('permissions-overlay').style.display = 'flex';
+  const res = await apiFetch('/api/permissions');
+  if (!res.ok) return;
+  const users = await res.json();
+  const sectionLabels = { notes: '笔记', opinions: '观点库', archives: '归档' };
+  let html = '';
+  for (const u of users) {
+    html += `<div class="perm-user-row" data-username="${escapeHtml(u.username)}">
+      <span class="perm-username">${escapeHtml(u.username)}</span>
+      <span class="perm-role-badge">${u.role}</span>
+      <div class="perm-checks">`;
+    for (const sec of ['notes', 'opinions', 'archives']) {
+      const checked = u.permissions.includes(sec) ? 'checked' : '';
+      html += `<label><input type="checkbox" data-section="${sec}" ${checked}> ${sectionLabels[sec]}</label>`;
+    }
+    html += `</div></div>`;
+  }
+  $('permissions-list').innerHTML = html;
+
+  // Attach change handlers
+  $('permissions-list').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const row = cb.closest('.perm-user-row');
+      const username = row.dataset.username;
+      const checks = row.querySelectorAll('input[type="checkbox"]');
+      const perms = [];
+      checks.forEach(c => { if (c.checked) perms.push(c.dataset.section); });
+      await apiFetch('/api/permissions/' + encodeURIComponent(username), {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions: perms }),
+      });
+    });
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Archive Functions
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ── Archive Topic Selector (reuses topic system) ──
+function renderArcTopicFormSelector() {
+  const index = buildTopicIndex();
+  const container = $('arc-topic-levels');
+  container.innerHTML = '';
+
+  const segments = arcTopicFormState.segments;
+
+  for (let depth = 0; depth <= segments.length; depth++) {
+    const prefix = segments.slice(0, depth);
+    const children = getTopicChildren(index, prefix);
+    if (children.length === 0 && depth > 0) break;
+
+    const sel = document.createElement('select');
+    sel.dataset.topicDepth = depth;
+    sel.dataset.mode = 'arc';
+    const current = segments[depth] || '';
+    sel.innerHTML = `<option value="">-- ${depth === 0 ? '选择主题' : '选择子级'} --</option>`;
+    children.forEach(c => {
+      sel.innerHTML += `<option value="${escapeHtml(c)}" ${c === current ? 'selected' : ''}>${escapeHtml(c)}</option>`;
+    });
+    sel.innerHTML += `<option value="__new__">+ 新建</option>`;
+    container.appendChild(sel);
+  }
+
+  // Update hint
+  const hint = $('arc-topic-hint');
+  if (segments.length > 0) {
+    hint.textContent = '当前主题: ' + joinTopicPath(segments);
+  } else {
+    hint.textContent = '';
+  }
+
+  // New topic row
+  $('arc-topic-new-row').style.display = arcTopicFormState.pendingNewDepth != null ? '' : 'none';
+  if (arcTopicFormState.pendingNewDepth != null) {
+    $('arc-new-topic-input').focus();
+  }
+}
+
+function handleArcTopicLevelChange(depth, value) {
+  if (value === '__new__') {
+    arcTopicFormState.segments = arcTopicFormState.segments.slice(0, depth);
+    arcTopicFormState.pendingNewDepth = depth;
+    $('arc-new-topic-input').value = '';
+    renderArcTopicFormSelector();
+    return;
+  }
+  arcTopicFormState.pendingNewDepth = null;
+  if (value) {
+    arcTopicFormState.segments = arcTopicFormState.segments.slice(0, depth);
+    arcTopicFormState.segments.push(value);
+  } else {
+    arcTopicFormState.segments = arcTopicFormState.segments.slice(0, depth);
+  }
+  renderArcTopicFormSelector();
+}
+
+function commitArcPendingTopic() {
+  const raw = $('arc-new-topic-input').value.trim();
+  if (!raw) return false;
+  const parts = raw.split('/').map(s => s.trim()).filter(Boolean);
+  if (parts.length === 0) return false;
+  const depth = arcTopicFormState.pendingNewDepth;
+  arcTopicFormState.segments = arcTopicFormState.segments.slice(0, depth).concat(parts);
+  arcTopicFormState.pendingNewDepth = null;
+  $('arc-new-topic-input').value = '';
+  renderArcTopicFormSelector();
+  return true;
+}
+
+// ── Archive Tag Selector (reuses tag system) ──
+function renderArcTagChips() {
+  const container = $('arc-tag-selector-input');
+  container.querySelectorAll('.tag-chip').forEach(c => c.remove());
+  const input = $('arc-tag-input');
+  arcSelectedTags.forEach(t => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `${escapeHtml(t)} <span class="tag-chip-remove" data-tag="${escapeHtml(t)}">×</span>`;
+    container.insertBefore(chip, input);
+  });
+}
+
+function updateArcTagDropdown() {
+  const input = $('arc-tag-input');
+  const dropdown = $('arc-tag-dropdown');
+  const q = input.value.trim().toLowerCase();
+  const available = allTags.filter(t => !arcSelectedTags.includes(t.name));
+  const filtered = q ? available.filter(t => t.name.toLowerCase().includes(q)) : available;
+
+  let html = '';
+  filtered.forEach(t => {
+    html += `<div class="tag-option" data-tag-name="${escapeHtml(t.name)}">${escapeHtml(t.name)}</div>`;
+  });
+  if (q && !allTags.some(t => t.name.toLowerCase() === q)) {
+    html += `<div class="tag-option add-new" data-tag-new="${escapeHtml(q)}">+ 新建标签 "${escapeHtml(q)}"</div>`;
+  }
+  dropdown.innerHTML = html;
+  dropdown.classList.toggle('open', html.length > 0 && document.activeElement === input);
+}
+
+function addArcTag(name) {
+  if (!name || arcSelectedTags.includes(name)) return;
+  arcSelectedTags.push(name);
+  $('arc-tag-input').value = '';
+  renderArcTagChips();
+  updateArcTagDropdown();
+}
+
+function removeArcTag(name) {
+  arcSelectedTags = arcSelectedTags.filter(t => t !== name);
+  renderArcTagChips();
+  updateArcTagDropdown();
+}
+
+// ── Archive List ──
+async function loadArchives() {
+  const topic = $('arc-filter-topic').value;
+  const tag = $('arc-filter-tag').value;
+  const sort = $('arc-filter-sort').value;
+  const params = new URLSearchParams();
+  if (topic) params.set('topic', topic);
+  if (tag) params.set('tag', tag);
+  if (sort) params.set('sort', sort);
+  const res = await apiFetch('/api/archives?' + params.toString());
+  if (!res.ok) return;
+  allArchives = await res.json();
+  renderArchiveList();
+}
+
+function renderArchiveList() {
+  const container = $('archive-list');
+  if (allArchives.length === 0) {
+    container.innerHTML = '<div class="empty-hint">暂无归档</div>';
+    return;
+  }
+  container.innerHTML = allArchives.map(a => {
+    const titleHtml = a.title ? `<div class="note-card-title">${escapeHtml(a.title)}</div>` : '';
+    const descSnippet = a.content_description.length > 120
+      ? escapeHtml(a.content_description.slice(0, 120)) + '...'
+      : escapeHtml(a.content_description);
+    let metaHtml = '';
+    if (a.topic) metaHtml += `<span class="badge-topic">${escapeHtml(formatTopicLabel(a.topic))}</span>`;
+    (a.tags || []).forEach(t => { metaHtml += `<span class="badge-tag">${escapeHtml(t)}</span>`; });
+    if (a.author) metaHtml += `<span class="badge-author">${escapeHtml(a.author)}</span>`;
+    if (a.avg_rating > 0) metaHtml += `<span class="stars-display">${renderStars(Math.round(a.avg_rating))}</span>`;
+    if (a.document_count > 0) metaHtml += `<span>📎 ${a.document_count}</span>`;
+    metaHtml += `<span>${formatTime(a.updated_at)}</span>`;
+    return `<div class="note-card" data-arc-id="${a.id}">
+      ${titleHtml}
+      <div style="font-size:0.88rem;color:var(--sub);margin-bottom:8px;line-height:1.6;">${descSnippet}</div>
+      <div class="note-card-meta">${metaHtml}</div>
+    </div>`;
+  }).join('');
+}
+
+function populateArcFilters() {
+  const topicSel = $('arc-filter-topic');
+  const tagSel = $('arc-filter-tag');
+  const curTopic = topicSel.value;
+  const curTag = tagSel.value;
+  topicSel.innerHTML = '<option value="">所有主题</option>';
+  allTopics.forEach(t => {
+    topicSel.innerHTML += `<option value="${escapeHtml(t.name)}" ${t.name === curTopic ? 'selected' : ''}>${escapeHtml(formatTopicLabel(t.name))}</option>`;
+  });
+  tagSel.innerHTML = '<option value="">所有标签</option>';
+  allTags.forEach(t => {
+    tagSel.innerHTML += `<option value="${escapeHtml(t.name)}" ${t.name === curTag ? 'selected' : ''}>${escapeHtml(t.name)}</option>`;
+  });
+}
+
+// ── Archive Form ──
+function openArchiveCreateForm() {
+  editingArchiveId = null;
+  arcSelectedTags = [];
+  arcTopicFormState = { segments: [], pendingNewDepth: null };
+  arcPendingDocs = [];
+  $('arc-form-title-label').textContent = '添加归档';
+  $('arc-title').value = '';
+  setArcDescValue('');
+  $('arc-author').value = '';
+  $('arc-doc-list').innerHTML = '';
+  renderArcTagChips();
+  renderArcTopicFormSelector();
+  showView('archives-form');
+}
+
+async function openArchiveEditForm(aid) {
+  const res = await apiFetch('/api/archives/' + aid);
+  if (!res.ok) return;
+  const a = await res.json();
+  editingArchiveId = aid;
+  arcSelectedTags = a.tags || [];
+  arcTopicFormState = { segments: splitTopicPath(a.topic), pendingNewDepth: null };
+  arcPendingDocs = a.documents || [];
+  $('arc-form-title-label').textContent = '编辑归档';
+  $('arc-title').value = a.title || '';
+  setArcDescValue(a.content_description || '');
+  $('arc-author').value = a.author || '';
+  renderArcTagChips();
+  renderArcTopicFormSelector();
+  renderArcFormDocList();
+  showView('archives-form');
+}
+
+function renderArcFormDocList() {
+  const container = $('arc-doc-list');
+  if (arcPendingDocs.length === 0) {
+    container.innerHTML = '';
+    return;
+  }
+  container.innerHTML = arcPendingDocs.map(d =>
+    `<div class="doc-item">
+      <a href="${d.url}" target="_blank">${escapeHtml(d.original_name)}</a>
+      <span class="doc-size">${formatFileSize(d.file_size)}</span>
+      <button class="btn-delete-doc" data-doc-id="${d.id}" type="button">删除</button>
+    </div>`
+  ).join('');
+}
+
+async function saveArchive(opts = {}) {
+  const topic = joinTopicPath(arcTopicFormState.segments);
+  const content_description = getArcDescValue().trim();
+  if (!content_description) {
+    showMsg('arc-form-msg', '内容描述及链接不能为空', 'err');
+    return;
+  }
+
+  // Ensure topics exist
+  if (topic) {
+    const parts = splitTopicPath(topic);
+    for (let i = 1; i <= parts.length; i++) {
+      const partial = joinTopicPath(parts.slice(0, i));
+      await apiFetch('/api/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: partial }),
+      });
+    }
+  }
+
+  // Ensure tags exist
+  for (const tag of arcSelectedTags) {
+    if (!allTags.some(t => t.name === tag)) {
+      await apiFetch('/api/tags', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: tag }),
+      });
+    }
+  }
+
+  const payload = {
+    title: $('arc-title').value.trim(),
+    topic,
+    content_description,
+    author: $('arc-author').value.trim(),
+    tags: arcSelectedTags,
+  };
+
+  const url = editingArchiveId ? '/api/archives/' + editingArchiveId : '/api/archives';
+  const method = editingArchiveId ? 'PUT' : 'POST';
+  const res = await apiFetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const err = await res.json();
+    showMsg('arc-form-msg', err.error || '保存失败', 'err');
+    return;
+  }
+
+  const data = await res.json();
+  const savedId = data.archive ? data.archive.id : editingArchiveId;
+
+  // Upload pending docs that don't have IDs yet (only for new archives)
+  // (Already uploaded docs have IDs from the server)
+
+  showMsg('arc-form-msg', '保存成功', 'ok');
+  await loadTopics();
+  await loadTags();
+
+  if (opts.navigateAfterSave && savedId) {
+    openArchiveDetail(savedId);
+  }
+}
+
+// ── Archive Detail ──
+async function openArchiveDetail(aid) {
+  viewingArchiveId = aid;
+  const res = await apiFetch('/api/archives/' + aid);
+  if (!res.ok) return;
+  const a = await res.json();
+
+  // Title
+  const titleEl = $('arc-detail-title');
+  titleEl.textContent = a.title || '(无标题)';
+  if (a.title) renderMathInElement(titleEl, KATEX_OPTS);
+
+  // Meta
+  let metaHtml = '';
+  if (a.topic) metaHtml += `<span class="badge-topic">${escapeHtml(formatTopicLabel(a.topic))}</span>`;
+  (a.tags || []).forEach(t => { metaHtml += `<span class="badge-tag">${escapeHtml(t)}</span>`; });
+  if (a.author) metaHtml += `<span class="badge-author">作者: ${escapeHtml(a.author)}</span>`;
+  metaHtml += `<span>创建: ${formatTime(a.created_at)}</span>`;
+  metaHtml += `<span>修改: ${formatTime(a.updated_at)}</span>`;
+  metaHtml += `<span>创建人: ${escapeHtml(a.created_by)}</span>`;
+  $('arc-detail-meta').innerHTML = metaHtml;
+
+  // Documents
+  const docs = a.documents || [];
+  const docsSection = $('arc-detail-docs-section');
+  if (docs.length > 0) {
+    docsSection.style.display = '';
+    $('arc-detail-docs').innerHTML = docs.map(d =>
+      `<div class="doc-item">
+        <a href="${d.url}" target="_blank">${escapeHtml(d.original_name)}</a>
+        <span class="doc-size">${formatFileSize(d.file_size)}</span>
+      </div>`
+    ).join('');
+  } else {
+    docsSection.style.display = 'none';
+  }
+
+  // Rating
+  currentArcRating = 0;
+  updateArcRatingStars();
+  loadArcRatings(aid);
+
+  // Comments & questions
+  loadArcComments(aid);
+  loadArcQuestions(aid);
+
+  showView('archives-detail');
+}
+
+function updateArcRatingStars() {
+  $('arc-rating-stars').querySelectorAll('.star-btn').forEach(btn => {
+    btn.classList.toggle('filled', parseInt(btn.dataset.val) <= currentArcRating);
+  });
+}
+
+async function loadArcRatings(aid) {
+  const res = await apiFetch('/api/archives/' + aid + '/ratings');
+  if (!res.ok) return;
+  const ratings = await res.json();
+  const container = $('arc-rating-history');
+  if (ratings.length === 0) {
+    container.innerHTML = '<div class="rating-history" style="color:var(--sub);font-size:0.82rem;">暂无评分</div>';
+    return;
+  }
+  container.innerHTML = '<div class="rating-history">' + ratings.map(r =>
+    `<div class="rating-history-item">
+      <div class="rating-history-main">
+        <span class="stars-display">${renderStars(r.rating)}</span>
+        <span>${escapeHtml(r.created_by)}</span>
+        <span>${formatTime(r.created_at)}</span>
+      </div>
+      <button class="btn-delete-op-rating" data-arc-rating-id="${r.id}">删除</button>
+    </div>`
+  ).join('') + '</div>';
+}
+
+async function submitArcRating() {
+  if (currentArcRating < 1 || currentArcRating > 5) {
+    alert('请选择1-5星评分');
+    return;
+  }
+  await apiFetch('/api/archives/' + viewingArchiveId + '/ratings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ rating: currentArcRating }),
+  });
+  currentArcRating = 0;
+  updateArcRatingStars();
+  loadArcRatings(viewingArchiveId);
+}
+
+async function deleteArcRating(rid) {
+  if (!confirm('确定要删除这条评分记录吗？')) return;
+  await apiFetch('/api/archive-ratings/' + rid, { method: 'DELETE' });
+  loadArcRatings(viewingArchiveId);
+}
+
+// ── Archive Comments ──
+async function loadArcComments(aid) {
+  const res = await apiFetch('/api/archives/' + aid + '/comments');
+  if (!res.ok) return;
+  const comments = await res.json();
+  renderArcComments(comments, aid);
+}
+
+function renderArcComments(comments, aid) {
+  const container = $('arc-comment-list');
+  if (comments.length === 0) {
+    container.innerHTML = '<div class="empty-hint" style="padding:12px 0;font-size:0.82rem;">暂无评论</div>';
+    return;
+  }
+  const topLevel = comments.filter(c => !c.parent_id);
+  const replies = comments.filter(c => c.parent_id);
+  let html = '';
+  topLevel.forEach(c => {
+    html += renderArcCommentItem(c, false);
+    replies.filter(r => r.parent_id === c.id).forEach(r => {
+      html += renderArcCommentItem(r, true);
+    });
+  });
+  container.innerHTML = html;
+  container.querySelectorAll('.cq-item-body').forEach(el => renderMathInElement(el, KATEX_OPTS));
+}
+
+function renderArcCommentItem(c, isReply) {
+  return `<div class="cq-item ${isReply ? 'is-reply' : ''}">
+    <div class="cq-item-header">
+      <span class="cq-icon">💬</span>
+      ${c.created_by ? '<strong>' + escapeHtml(c.created_by) + '</strong>' : ''}
+      <span>${formatTime(c.created_at)}</span>
+    </div>
+    <div class="cq-item-body">${escapeHtml(c.content)}</div>
+    <div class="cq-item-actions">
+      <button onclick="arcCommentReply('${c.id}')">回复</button>
+      <button class="btn-delete-cq" onclick="deleteArcComment('${c.id}')">删除</button>
+    </div>
+  </div>`;
+}
+
+function arcCommentReply(parentId) {
+  const container = $('arc-comment-list');
+  container.querySelectorAll('.cq-input-box, .arc-reply-wrapper').forEach(b => b.remove());
+  const btn = container.querySelector(`[onclick*="arcCommentReply('${parentId}')"]`);
+  const item = btn ? btn.closest('.cq-item') : null;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'arc-reply-wrapper';
+  if (item) item.after(wrapper); else container.appendChild(wrapper);
+  createCQInputBox({
+    container: wrapper,
+    placeholder: '回复...',
+    submitLabel: '提交回复',
+    isReply: true,
+    onSubmit: async (text) => {
+      await apiFetch('/api/archives/' + viewingArchiveId + '/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text, parent_id: parentId }),
+      });
+      wrapper.remove();
+      loadArcComments(viewingArchiveId);
+    },
+    onCancel: () => wrapper.remove(),
+  });
+}
+
+async function deleteArcComment(cid) {
+  if (!confirm('确定要删除此评论吗？')) return;
+  await apiFetch('/api/archive-comments/' + cid, { method: 'DELETE' });
+  loadArcComments(viewingArchiveId);
+}
+
+// ── Archive Questions ──
+async function loadArcQuestions(aid) {
+  const res = await apiFetch('/api/archives/' + aid + '/questions');
+  if (!res.ok) return;
+  const questions = await res.json();
+  renderArcQuestions(questions, aid);
+}
+
+function renderArcQuestions(questions, aid) {
+  const container = $('arc-question-list');
+  if (questions.length === 0) {
+    container.innerHTML = '<div class="empty-hint" style="padding:12px 0;font-size:0.82rem;">暂无问题</div>';
+    return;
+  }
+  const topLevel = questions.filter(q => !q.parent_id);
+  const replies = questions.filter(q => q.parent_id);
+  let html = '';
+  topLevel.forEach(q => {
+    html += renderArcQuestionItem(q, false);
+    replies.filter(r => r.parent_id === q.id).forEach(r => {
+      html += renderArcQuestionItem(r, true);
+    });
+  });
+  container.innerHTML = html;
+  container.querySelectorAll('.cq-item-body').forEach(el => renderMathInElement(el, KATEX_OPTS));
+}
+
+function renderArcQuestionItem(q, isReply) {
+  const resolved = q.resolved;
+  const icon = resolved ? '<span class="cq-icon resolved">✅</span>' : '<span class="cq-icon question">❓</span>';
+  const toggleBtn = resolved
+    ? `<button class="btn-unresolve" onclick="toggleArcQuestionResolved('${q.id}')">标记未解决</button>`
+    : `<button class="btn-resolve" onclick="toggleArcQuestionResolved('${q.id}')">标记已解决</button>`;
+  return `<div class="cq-item ${isReply ? 'is-reply' : ''}">
+    <div class="cq-item-header">
+      ${icon}
+      ${q.created_by ? '<strong>' + escapeHtml(q.created_by) + '</strong>' : ''}
+      <span>${formatTime(q.created_at)}</span>
+    </div>
+    <div class="cq-item-body">${escapeHtml(q.content)}</div>
+    <div class="cq-item-actions">
+      ${toggleBtn}
+      <button onclick="arcQuestionReply('${q.id}')">回复</button>
+      <button class="btn-delete-cq" onclick="deleteArcQuestion('${q.id}')">删除</button>
+    </div>
+  </div>`;
+}
+
+async function toggleArcQuestionResolved(qid) {
+  await apiFetch('/api/archive-questions/' + qid + '/toggle-resolved', { method: 'POST' });
+  loadArcQuestions(viewingArchiveId);
+}
+
+function arcQuestionReply(parentId) {
+  const container = $('arc-question-list');
+  container.querySelectorAll('.cq-input-box, .arc-reply-wrapper').forEach(b => b.remove());
+  const btn = container.querySelector(`[onclick*="arcQuestionReply('${parentId}')"]`);
+  const item = btn ? btn.closest('.cq-item') : null;
+  const wrapper = document.createElement('div');
+  wrapper.className = 'arc-reply-wrapper';
+  if (item) item.after(wrapper); else container.appendChild(wrapper);
+  createCQInputBox({
+    container: wrapper,
+    placeholder: '回复问题...',
+    submitLabel: '提交回复',
+    isReply: true,
+    onSubmit: async (text) => {
+      await apiFetch('/api/archives/' + viewingArchiveId + '/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text, parent_id: parentId }),
+      });
+      wrapper.remove();
+      loadArcQuestions(viewingArchiveId);
+    },
+    onCancel: () => wrapper.remove(),
+  });
+}
+
+async function deleteArcQuestion(qid) {
+  if (!confirm('确定要删除此问题吗？')) return;
+  await apiFetch('/api/archive-questions/' + qid, { method: 'DELETE' });
+  loadArcQuestions(viewingArchiveId);
+}
+
+// ── Archive Doc Upload ──
+async function uploadArcDoc(file, aid) {
+  const fd = new FormData();
+  fd.append('document', file);
+  const res = await apiFetch('/api/archives/' + aid + '/documents', { method: 'POST', body: fd });
+  if (!res.ok) {
+    const err = await res.json();
+    showMsg('arc-doc-msg', err.error || '上传失败', 'err');
+    return null;
+  }
+  const data = await res.json();
+  return data.document;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    Event Listeners
    ════════════════════════════════════════════════════════════════════════ */
 $('btn-login').addEventListener('click', doLogin);
@@ -3605,6 +4757,14 @@ $('op-type-selector').addEventListener('click', (e) => {
   updateOpTypeSelector();
 });
 
+$('op-verify-priority-stars').addEventListener('click', (e) => {
+  const btn = e.target.closest('.star-btn');
+  if (!btn) return;
+  const val = parseInt(btn.dataset.val);
+  currentVerifyPriority = (currentVerifyPriority === val) ? 0 : val;
+  updateVerifyPriorityStars();
+});
+
 $('btn-save-opinion').addEventListener('click', () => saveOpinion({ navigateAfterSave: false }));
 $('btn-save-opinion-open').addEventListener('click', () => saveOpinion({ navigateAfterSave: true }));
 
@@ -3661,11 +4821,6 @@ $('op-title').addEventListener('input', function() {
   renderOpTitlePreview(this.value);
 });
 
-// Opinion content live preview
-$('op-editor-md').addEventListener('input', function() {
-  renderMarkdownKatex(this.value, $('op-content-preview'));
-});
-
 // Opinion questions
 $('btn-add-op-question').addEventListener('click', () => {
   const area = $('op-question-input-area');
@@ -3685,6 +4840,196 @@ $('btn-add-op-question').addEventListener('click', () => {
   });
 });
 
+// ── Permissions ──
+$('btn-permissions').addEventListener('click', openPermissionsModal);
+$('btn-permissions-close').addEventListener('click', () => {
+  $('permissions-overlay').style.display = 'none';
+});
+
+// ── Archive event listeners ──
+$('btn-add-archive').addEventListener('click', openArchiveCreateForm);
+$('btn-back-to-arc-list').addEventListener('click', () => { loadArchives(); showView('archives-list'); });
+$('btn-back-from-arc-detail').addEventListener('click', () => { loadArchives(); showView('archives-list'); });
+
+$('btn-save-archive').addEventListener('click', () => saveArchive({ navigateAfterSave: false }));
+$('btn-save-archive-open').addEventListener('click', () => saveArchive({ navigateAfterSave: true }));
+
+$('btn-edit-archive').addEventListener('click', () => {
+  if (viewingArchiveId) openArchiveEditForm(viewingArchiveId);
+});
+
+$('btn-delete-archive').addEventListener('click', async () => {
+  if (!viewingArchiveId) return;
+  if (!confirm('确定要删除此归档吗？此操作不可撤销。')) return;
+  const res = await apiFetch('/api/archives/' + viewingArchiveId, { method: 'DELETE' });
+  if (!res.ok) { alert('删除失败'); return; }
+  await loadArchives();
+  showView('archives-list');
+});
+
+$('arc-filter-topic').addEventListener('change', loadArchives);
+$('arc-filter-tag').addEventListener('change', loadArchives);
+$('arc-filter-sort').addEventListener('change', loadArchives);
+
+// Archive topic selector
+$('arc-topic-levels').addEventListener('change', (e) => {
+  const sel = e.target.closest('select[data-topic-depth]');
+  if (!sel || sel.dataset.mode !== 'arc') return;
+  handleArcTopicLevelChange(parseInt(sel.dataset.topicDepth, 10), sel.value);
+});
+
+$('arc-new-topic-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); commitArcPendingTopic(); }
+});
+$('btn-arc-topic-commit-level').addEventListener('click', () => {
+  if (!commitArcPendingTopic()) showMsg('arc-form-msg', '请输入新主题名称', 'err');
+});
+
+// Archive tag selector
+$('arc-tag-input').addEventListener('input', updateArcTagDropdown);
+$('arc-tag-input').addEventListener('focus', updateArcTagDropdown);
+$('arc-tag-input').addEventListener('blur', () => {
+  setTimeout(() => { $('arc-tag-dropdown').classList.remove('open'); }, 200);
+});
+$('arc-tag-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const v = $('arc-tag-input').value.trim();
+    if (v) addArcTag(v);
+  } else if (e.key === 'Backspace' && !$('arc-tag-input').value && arcSelectedTags.length > 0) {
+    removeArcTag(arcSelectedTags[arcSelectedTags.length - 1]);
+  }
+});
+$('arc-tag-dropdown').addEventListener('click', (e) => {
+  const opt = e.target.closest('.tag-option');
+  if (!opt) return;
+  const name = opt.dataset.tagName || opt.dataset.tagNew;
+  if (name) addArcTag(name);
+});
+$('arc-tag-selector-input').addEventListener('click', (e) => {
+  const rm = e.target.closest('.tag-chip-remove');
+  if (rm) { removeArcTag(rm.dataset.tag); return; }
+  $('arc-tag-input').focus();
+});
+
+// Archive doc upload
+$('btn-arc-upload-doc').addEventListener('click', () => { $('arc-doc-input').click(); });
+$('arc-doc-input').addEventListener('change', async () => {
+  const files = $('arc-doc-input').files;
+  if (!files.length) return;
+
+  // Need to save first if creating
+  if (!editingArchiveId) {
+    const content_description = getArcDescValue().trim();
+    if (!content_description) {
+      showMsg('arc-doc-msg', '请先填写内容描述及链接后保存，再上传文档', 'err');
+      $('arc-doc-input').value = '';
+      return;
+    }
+    // Auto-save first
+    await saveArchive({ navigateAfterSave: false });
+    // After save, editingArchiveId should still be null for new, but we need the aid
+    // Let's check if we saved successfully by looking at allArchives
+  }
+
+  // If still no editingArchiveId, get it from the last saved archive
+  let aid = editingArchiveId;
+  if (!aid) {
+    // Re-load archives to find the one just created
+    const listRes = await apiFetch('/api/archives?sort=created_desc');
+    if (listRes.ok) {
+      const list = await listRes.json();
+      if (list.length > 0) {
+        aid = list[0].id;
+        editingArchiveId = aid;
+      }
+    }
+  }
+  if (!aid) {
+    showMsg('arc-doc-msg', '请先保存归档', 'err');
+    $('arc-doc-input').value = '';
+    return;
+  }
+
+  for (const file of files) {
+    const doc = await uploadArcDoc(file, aid);
+    if (doc) arcPendingDocs.push(doc);
+  }
+  renderArcFormDocList();
+  $('arc-doc-input').value = '';
+});
+
+$('arc-doc-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-delete-doc');
+  if (!btn) return;
+  if (!confirm('确定要删除此文档吗？')) return;
+  const docId = btn.dataset.docId;
+  await apiFetch('/api/archive-documents/' + docId, { method: 'DELETE' });
+  arcPendingDocs = arcPendingDocs.filter(d => d.id !== docId);
+  renderArcFormDocList();
+});
+
+// Archive rating
+$('arc-rating-stars').addEventListener('click', (e) => {
+  const btn = e.target.closest('.star-btn');
+  if (!btn) return;
+  const val = parseInt(btn.dataset.val);
+  currentArcRating = (currentArcRating === val) ? 0 : val;
+  updateArcRatingStars();
+});
+
+$('btn-submit-arc-rating').addEventListener('click', submitArcRating);
+
+$('arc-rating-history').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-arc-rating-id]');
+  if (!btn) return;
+  deleteArcRating(btn.dataset.arcRatingId);
+});
+
+// Archive list card click
+$('archive-list').addEventListener('click', (e) => {
+  const card = e.target.closest('[data-arc-id]');
+  if (card) openArchiveDetail(card.dataset.arcId);
+});
+
+// Archive comments
+$('btn-add-arc-comment').addEventListener('click', () => {
+  const area = $('arc-comment-input-area');
+  if (area.querySelector('.cq-input-box')) return;
+  createCQInputBox({
+    container: area,
+    placeholder: '输入评论...',
+    submitLabel: '提交评论',
+    onSubmit: async (text) => {
+      await apiFetch('/api/archives/' + viewingArchiveId + '/comments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadArcComments(viewingArchiveId);
+    },
+  });
+});
+
+// Archive questions
+$('btn-add-arc-question').addEventListener('click', () => {
+  const area = $('arc-question-input-area');
+  if (area.querySelector('.cq-input-box')) return;
+  createCQInputBox({
+    container: area,
+    placeholder: '输入问题...',
+    submitLabel: '提交问题',
+    onSubmit: async (text) => {
+      await apiFetch('/api/archives/' + viewingArchiveId + '/questions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
+      });
+      loadArcQuestions(viewingArchiveId);
+    },
+  });
+});
+
 /* ════════════════════════════════════════════════════════════════════════
    Marked Configuration
    ════════════════════════════════════════════════════════════════════════ */
@@ -3694,6 +5039,7 @@ marked.setOptions({ breaks: true, gfm: true });
    Init
    ════════════════════════════════════════════════════════════════════════ */
 renderTopicFormSelector();
+renderArcTopicFormSelector();
 restoreSession();
 </script>
 </body>

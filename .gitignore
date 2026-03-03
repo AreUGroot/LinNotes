@@ -4,3 +4,4 @@ __pycache__/
 
 data/app.db
 data/images/
+data/documents/
