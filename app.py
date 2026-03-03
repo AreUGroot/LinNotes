@@ -753,18 +753,6 @@ def get_note(note_id):
 @_require_section('notes')
 def update_note(note_id):
     b = request.get_json(force=True) or {}
-    title = str(b.get('title', '')).strip()
-    topic = str(b.get('topic', '')).strip()
-    content = str(b.get('content', ''))
-    priority = int(b.get('priority', 0) or 0)
-    tag_names = b.get('tags', [])
-
-    if not topic:
-        return jsonify({'error': '请选择或创建主题'}), 400
-    if len(title) > MAX_TITLE_LENGTH:
-        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
-    if len(content) > MAX_CONTENT_SIZE:
-        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -774,13 +762,27 @@ def update_note(note_id):
         if not row:
             return jsonify({'error': '笔记不存在'}), 404
 
+        title = str(b.get('title', row['title'])).strip()
+        topic = str(b.get('topic', row['topic'])).strip()
+        content = str(b.get('content', row['content']))
+        priority = int(b.get('priority', row['priority']) or 0)
+        tag_names = b.get('tags') if 'tags' in b else None
+
+        if not topic:
+            return jsonify({'error': '请选择或创建主题'}), 400
+        if len(title) > MAX_TITLE_LENGTH:
+            return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+        if len(content) > MAX_CONTENT_SIZE:
+            return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
+
         _ensure_topic(db, topic)
-        _ensure_tags(db, tag_names)
         db.execute(
             'UPDATE notes SET title=?, topic=?, content=?, priority=?, updated_at=? WHERE id=?',
             (title, topic, content, priority, now, note_id)
         )
-        _set_note_tags(db, note_id, tag_names)
+        if tag_names is not None:
+            _ensure_tags(db, tag_names)
+            _set_note_tags(db, note_id, tag_names)
         db.commit()
         tags = _note_tags(db, note_id)
         row = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
@@ -1142,21 +1144,6 @@ def get_opinion(oid):
 @_require_section('opinions')
 def update_opinion(oid):
     b = request.get_json(force=True) or {}
-    title = str(b.get('title', '')).strip()
-    topic = str(b.get('topic', '')).strip()
-    content = str(b.get('content', ''))
-    predictor = str(b.get('predictor', '')).strip()
-    time_scale = str(b.get('time_scale', '')).strip()
-    rebutted_opinion = str(b.get('rebutted_opinion', '')).strip()
-    rebutted_source = str(b.get('rebutted_source', '')).strip()
-    fact_source = str(b.get('fact_source', '')).strip()
-    fact_link = str(b.get('fact_link', '')).strip()
-    verify_priority = int(b.get('verify_priority', 0) or 0)
-
-    if len(title) > MAX_TITLE_LENGTH:
-        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
-    if len(content) > MAX_CONTENT_SIZE:
-        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -1165,6 +1152,22 @@ def update_opinion(oid):
         row = db.execute('SELECT * FROM opinions WHERE id = ?', (oid,)).fetchone()
         if not row:
             return jsonify({'error': '不存在'}), 404
+
+        title = str(b.get('title', row['title'])).strip()
+        topic = str(b.get('topic', row['topic'])).strip()
+        content = str(b.get('content', row['content']))
+        predictor = str(b.get('predictor', row['predictor'])).strip()
+        time_scale = str(b.get('time_scale', row['time_scale'])).strip()
+        rebutted_opinion = str(b.get('rebutted_opinion', row['rebutted_opinion'])).strip()
+        rebutted_source = str(b.get('rebutted_source', row['rebutted_source'])).strip()
+        fact_source = str(b.get('fact_source', row['fact_source'])).strip()
+        fact_link = str(b.get('fact_link', row['fact_link'])).strip()
+        verify_priority = int(b.get('verify_priority', row['verify_priority']) or 0)
+
+        if len(title) > MAX_TITLE_LENGTH:
+            return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+        if len(content) > MAX_CONTENT_SIZE:
+            return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
         op_type = row['type']
         if op_type == '反驳' and not content.strip():
@@ -1679,19 +1682,6 @@ def get_archive(aid):
 @_require_section('archives')
 def update_archive(aid):
     b = request.get_json(force=True) or {}
-    title = str(b.get('title', '')).strip()
-    topic = str(b.get('topic', '')).strip()
-    content_description = str(b.get('content_description', '')).strip()
-    author = str(b.get('author', '')).strip()
-    body = str(b.get('body', ''))
-    tag_names = b.get('tags', [])
-
-    if not content_description:
-        return jsonify({'error': '内容描述及链接不能为空'}), 400
-    if len(title) > MAX_TITLE_LENGTH:
-        return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
-    if len(body) > MAX_CONTENT_SIZE:
-        return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
     now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
 
@@ -1701,15 +1691,30 @@ def update_archive(aid):
         if not row:
             return jsonify({'error': '归档不存在'}), 404
 
+        title = str(b.get('title', row['title'])).strip()
+        topic = str(b.get('topic', row['topic'])).strip()
+        content_description = str(b.get('content_description', row['content_description'])).strip()
+        author = str(b.get('author', row['author'])).strip()
+        body = str(b.get('body', row['body']))
+        tag_names = b.get('tags') if 'tags' in b else None
+
+        if not content_description:
+            return jsonify({'error': '内容描述及链接不能为空'}), 400
+        if len(title) > MAX_TITLE_LENGTH:
+            return jsonify({'error': f'标题超过最大长度限制 ({MAX_TITLE_LENGTH} 字符)'}), 400
+        if len(body) > MAX_CONTENT_SIZE:
+            return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
+
         if topic:
             _ensure_topic(db, topic)
-        _ensure_tags(db, tag_names)
         db.execute(
             '''UPDATE archives SET title=?, topic=?, content_description=?, author=?, body=?,
                updated_at=? WHERE id=?''',
             (title, topic, content_description, author, body, now, aid)
         )
-        _set_archive_tags(db, aid, tag_names)
+        if tag_names is not None:
+            _ensure_tags(db, tag_names)
+            _set_archive_tags(db, aid, tag_names)
         db.commit()
         tags = _archive_tags(db, aid)
         row = db.execute('SELECT * FROM archives WHERE id = ?', (aid,)).fetchone()
