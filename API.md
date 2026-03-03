@@ -556,7 +556,7 @@ curl -X POST https://your-server/api/upload \
 ```bash
 pip install flask flask-cors
 python app.py
-# 服务运行在 http://localhost:3006
+# 服务运行在 https://notes.linguistat.com
 ```
 
 ### 生产环境部署

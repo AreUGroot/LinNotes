@@ -1,14 +1,14 @@
 # Lin Notes 项目指引
 
 ## 项目概述
-Lin Notes 是一个基于 Flask + SQLite 的笔记管理系统，运行在 `http://localhost:3006`。
+Lin Notes 是一个基于 Flask + SQLite 的笔记管理系统，运行在 `https://notes.linguistat.com`。
 
 ## API 使用
 
 ### 认证
 所有 API 请求需要 Bearer Token 认证。登录获取 Token：
 ```bash
-curl -s -X POST http://localhost:3006/api/auth/login \
+curl -s -X POST https://notes.linguistat.com/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"Lin","password":"951204"}'
 ```
@@ -17,7 +17,7 @@ curl -s -X POST http://localhost:3006/api/auth/login \
 
 **创建笔记：**
 ```bash
-curl -s -X POST http://localhost:3006/api/notes \
+curl -s -X POST https://notes.linguistat.com/api/notes \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title":"标题","topic":"主题名","content":"Markdown正文","priority":0,"tags":["标签"]}'
@@ -26,7 +26,7 @@ curl -s -X POST http://localhost:3006/api/notes \
 
 **创建观点：**
 ```bash
-curl -s -X POST http://localhost:3006/api/opinions \
+curl -s -X POST https://notes.linguistat.com/api/opinions \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"type":"观点","topic":"主题名","title":"标题","content":"正文"}'
@@ -35,7 +35,7 @@ curl -s -X POST http://localhost:3006/api/opinions \
 
 **创建归档：**
 ```bash
-curl -s -X POST http://localhost:3006/api/archives \
+curl -s -X POST https://notes.linguistat.com/api/archives \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"title":"标题","topic":"主题名","content_description":"描述（必填）","author":"作者","body":"正文","tags":["标签"]}'
