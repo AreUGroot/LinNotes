@@ -166,6 +166,7 @@ GET /api/notes?fields=metadata
 |------|------|
 | `topic` | 按主题筛选 |
 | `tag` | 按标签筛选 |
+| `q` | 模糊搜索（搜索标题和正文） |
 | `sort` | 排序方式：`updated_desc`（默认）、`created_desc`、`created_asc`、`priority_desc`、`priority_asc` |
 | `fields` | 设为 `metadata` 则不返回 `content` 字段 |
 
@@ -243,8 +244,10 @@ GET /api/opinions?fields=metadata
 | 参数 | 说明 |
 |------|------|
 | `type` | 按类型筛选：`事实`、`观点`、`反驳`、`预测`、`计划` |
+| `topic` | 按主题筛选 |
 | `created_by` | 按创建者筛选 |
 | `predictor` | 按预测者筛选 |
+| `q` | 模糊搜索（搜索标题和正文） |
 | `sort` | 排序方式：`updated_desc`（默认）、`created_desc`、`created_asc`、`verify_priority_desc`、`verify_priority_asc`、`rating_desc`、`rating_asc`、`measure_time_desc`、`measure_time_asc` |
 | `fields` | 设为 `metadata` 则不返回 `content` 字段 |
 
@@ -365,6 +368,7 @@ GET /api/archives?fields=metadata
 |------|------|
 | `topic` | 按主题筛选 |
 | `tag` | 按标签筛选 |
+| `q` | 模糊搜索（搜索标题和内容描述） |
 | `sort` | 排序方式：`updated_desc`（默认）、`created_desc`、`created_asc`、`rating_desc`、`rating_asc` |
 | `fields` | 设为 `metadata` 则不返回 `body` 字段 |
 
@@ -476,11 +480,16 @@ DELETE    /api/archive-questions/<question_id>
 以下端点所有已认证用户均可访问，不受模块权限限制：
 
 ```
-GET  /api/topics     # 获取所有主题
-POST /api/topics     # 创建主题（请求体：{"name": "主题名"}）
-GET  /api/tags       # 获取所有标签
-POST /api/tags       # 创建标签（请求体：{"name": "标签名"}）
+GET  /api/topics              # 获取所有主题（用于表单选择器）
+GET  /api/topics?section=notes     # 获取笔记模块的主题
+GET  /api/topics?section=opinions  # 获取观点库模块的主题
+GET  /api/topics?section=archives  # 获取归档模块的主题
+POST /api/topics              # 创建主题（请求体：{"name": "主题名"}）
+GET  /api/tags                # 获取所有标签
+POST /api/tags                # 创建标签（请求体：{"name": "标签名"}）
 ```
+
+> `section` 参数可选。指定时返回该模块中实际使用的主题；不指定时返回全局主题表（用于表单层级选择器）。各模块的主题互相独立。
 
 ### 图片上传
 

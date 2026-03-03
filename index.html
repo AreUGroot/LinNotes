@@ -300,6 +300,19 @@ button {
   border-radius: 12px;
 }
 .filter-bar select { min-width: 130px; }
+.filter-bar input[type="search"] {
+  min-width: 180px;
+  padding: 7px 10px;
+  border: 1.5px solid var(--bdr);
+  border-radius: 8px;
+  font-size: 0.88rem;
+  color: var(--text);
+  background: var(--white);
+  outline: none;
+}
+.filter-bar input[type="search"]:focus {
+  border-color: var(--pri);
+}
 
 .note-card {
   background: var(--card);
@@ -643,6 +656,14 @@ button {
 }
 .detail-body {
   min-height: 200px;
+}
+.render-box a {
+  color: var(--pri);
+  text-decoration: underline;
+  word-break: break-all;
+}
+.render-box a:hover {
+  opacity: 0.8;
 }
 
 /* ── Comments & Questions ──────────────────────────────────────────────── */
@@ -1125,6 +1146,7 @@ button {
   </div>
 
   <div class="filter-bar">
+    <input type="search" id="filter-search" placeholder="搜索笔记..." autocomplete="off">
     <select id="filter-topic"><option value="">所有主题</option></select>
     <select id="filter-tag"><option value="">所有标签</option></select>
     <select id="filter-sort">
@@ -1265,6 +1287,8 @@ button {
   </div>
 
   <div class="filter-bar">
+    <input type="search" id="op-filter-search" placeholder="搜索观点..." autocomplete="off">
+    <select id="op-filter-topic"><option value="">所有主题</option></select>
     <select id="op-filter-type">
       <option value="">全部类型</option>
       <option value="事实">事实</option>
@@ -1463,6 +1487,7 @@ button {
     <button class="btn-primary" id="btn-add-archive">+ 添加归档</button>
   </div>
   <div class="filter-bar">
+    <input type="search" id="arc-filter-search" placeholder="搜索归档..." autocomplete="off">
     <select id="arc-filter-topic"><option value="">所有主题</option></select>
     <select id="arc-filter-tag"><option value="">所有标签</option></select>
     <select id="arc-filter-sort">
@@ -1556,6 +1581,11 @@ button {
   </div>
 
 
+  <div style="margin-bottom:16px;">
+    <div class="section-label">内容描述</div>
+    <div class="detail-body render-box" id="arc-detail-desc"></div>
+  </div>
+
   <div id="arc-detail-docs-section" style="margin-bottom:16px;display:none;">
     <div class="section-label">文档</div>
     <div id="arc-detail-docs"></div>
@@ -1639,6 +1669,9 @@ let authState = { token: '', username: '', role: '', permissions: [] };
 
 let allNotes = [];
 let allTopics = [];
+let noteTopics = [];
+let opinionTopics = [];
+let archiveTopics = [];
 let allTags = [];
 let currentView = 'list';
 let editingNoteId = null;
@@ -1916,6 +1949,14 @@ function showMsg(elId, text, type) {
 }
 
 function $(id) { return document.getElementById(id); }
+
+function debounce(fn, delay) {
+  let timer;
+  return function(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), delay);
+  };
+}
 
 function splitTopicPath(raw) {
   return String(raw || '')
@@ -2198,17 +2239,15 @@ async function doLogin() {
 
 function loginNavigate() {
   const perms = authState.permissions || [];
-  // Always load topics and tags for filters
+  // Always load topics and tags for form selectors
   loadTopics();
   loadTags();
   if (perms.includes('notes')) {
     loadAllData();
     switchToSection('notes');
   } else if (perms.includes('opinions')) {
-    loadOpinions();
     switchToSection('opinions');
   } else if (perms.includes('archives')) {
-    loadArchives();
     switchToSection('archives');
   }
 }
@@ -2259,11 +2298,14 @@ function showView(name) {
 function switchToSection(section) {
   document.querySelectorAll('.nav-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === section));
   if (section === 'notes') {
+    loadNoteTopics();
     showView('list');
   } else if (section === 'archives') {
+    loadArchiveTopics();
     loadArchives();
     showView('archives-list');
   } else {
+    loadOpinionTopics();
     loadOpinions();
     showView('opinions-list');
   }
@@ -2597,7 +2639,7 @@ function hideFP() {
    Data Loading
    ════════════════════════════════════════════════════════════════════════ */
 async function loadAllData() {
-  await Promise.all([loadTopics(), loadTags(), loadNotes()]);
+  await Promise.all([loadTopics(), loadTags(), loadNotes(), loadNoteTopics()]);
 }
 
 async function loadTopics() {
@@ -2606,6 +2648,33 @@ async function loadTopics() {
     if (!res.ok) return;
     allTopics = await res.json();
     fillTopicSelectors();
+  } catch(e) {}
+}
+
+async function loadNoteTopics() {
+  try {
+    const res = await apiFetch('/api/topics?section=notes');
+    if (!res.ok) return;
+    noteTopics = await res.json();
+    fillNoteTopicFilter();
+  } catch(e) {}
+}
+
+async function loadOpinionTopics() {
+  try {
+    const res = await apiFetch('/api/topics?section=opinions');
+    if (!res.ok) return;
+    opinionTopics = await res.json();
+    fillOpinionTopicFilter();
+  } catch(e) {}
+}
+
+async function loadArchiveTopics() {
+  try {
+    const res = await apiFetch('/api/topics?section=archives');
+    if (!res.ok) return;
+    archiveTopics = await res.json();
+    fillArchiveTopicFilter();
   } catch(e) {}
 }
 
@@ -2623,10 +2692,12 @@ async function loadNotes() {
     const topic = $('filter-topic').value;
     const tag = $('filter-tag').value;
     const sort = $('filter-sort').value;
+    const q = $('filter-search').value.trim();
     const params = new URLSearchParams();
     if (topic) params.set('topic', topic);
     if (tag) params.set('tag', tag);
     if (sort) params.set('sort', sort);
+    if (q) params.set('q', q);
 
     const res = await apiFetch('/api/notes?' + params);
     if (!res.ok) return;
@@ -2639,20 +2710,38 @@ async function loadNotes() {
    Selectors
    ════════════════════════════════════════════════════════════════════════ */
 function fillTopicSelectors() {
-  // Note filter
+  // Form selectors (need all topics for hierarchical selector)
+  renderTopicFormSelector();
+  renderArcTopicFormSelector();
+}
+
+function fillNoteTopicFilter() {
   const fSel = $('filter-topic');
   const fVal = fSel.value;
   fSel.innerHTML = '<option value="">所有主题</option>';
-  allTopics.forEach(t => {
+  noteTopics.forEach(t => {
     fSel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(formatTopicLabel(t.name)) + '</option>';
   });
   fSel.value = fVal;
+}
 
-  // Note form
-  renderTopicFormSelector();
+function fillOpinionTopicFilter() {
+  const sel = $('op-filter-topic');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">所有主题</option>';
+  opinionTopics.forEach(t => {
+    sel.innerHTML += '<option value="' + escapeHtml(t.name) + '">' + escapeHtml(formatTopicLabel(t.name)) + '</option>';
+  });
+  sel.value = val;
+}
 
-  // Archive filter
-  populateArcFilters();
+function fillArchiveTopicFilter() {
+  const sel = $('arc-filter-topic');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">所有主题</option>';
+  archiveTopics.forEach(t => {
+    sel.innerHTML += '<option value="' + escapeHtml(t.name) + '" ' + (t.name === val ? 'selected' : '') + '>' + escapeHtml(formatTopicLabel(t.name)) + '</option>';
+  });
 }
 
 function fillTagFilter() {
@@ -3423,11 +3512,15 @@ async function loadOpinions() {
     const sort = $('op-filter-sort').value;
     const created_by = $('op-filter-creator').value;
     const predictor = $('op-filter-predictor').value;
+    const topic = $('op-filter-topic').value;
+    const q = $('op-filter-search').value.trim();
     const params = new URLSearchParams();
     if (type) params.set('type', type);
     if (sort) params.set('sort', sort);
     if (created_by) params.set('created_by', created_by);
     if (predictor) params.set('predictor', predictor);
+    if (topic) params.set('topic', topic);
+    if (q) params.set('q', q);
     const res = await apiFetch('/api/opinions?' + params);
     if (!res.ok) return;
     allOpinions = await res.json();
@@ -3675,6 +3768,7 @@ async function saveOpinion(options = {}) {
 
     showMsg('op-form-msg', '保存成功！', 'ok');
     await loadOpinions();
+    loadOpinionTopics();
 
     if (!navigateAfterSave) return;
     if (savedId) {
@@ -4199,10 +4293,12 @@ async function loadArchives() {
   const topic = $('arc-filter-topic').value;
   const tag = $('arc-filter-tag').value;
   const sort = $('arc-filter-sort').value;
+  const q = $('arc-filter-search').value.trim();
   const params = new URLSearchParams();
   if (topic) params.set('topic', topic);
   if (tag) params.set('tag', tag);
   if (sort) params.set('sort', sort);
+  if (q) params.set('q', q);
   const res = await apiFetch('/api/archives?' + params.toString());
   if (!res.ok) return;
   allArchives = await res.json();
@@ -4236,14 +4332,8 @@ function renderArchiveList() {
 }
 
 function populateArcFilters() {
-  const topicSel = $('arc-filter-topic');
   const tagSel = $('arc-filter-tag');
-  const curTopic = topicSel.value;
   const curTag = tagSel.value;
-  topicSel.innerHTML = '<option value="">所有主题</option>';
-  allTopics.forEach(t => {
-    topicSel.innerHTML += `<option value="${escapeHtml(t.name)}" ${t.name === curTopic ? 'selected' : ''}>${escapeHtml(formatTopicLabel(t.name))}</option>`;
-  });
   tagSel.innerHTML = '<option value="">所有标签</option>';
   allTags.forEach(t => {
     tagSel.innerHTML += `<option value="${escapeHtml(t.name)}" ${t.name === curTag ? 'selected' : ''}>${escapeHtml(t.name)}</option>`;
@@ -4362,6 +4452,7 @@ async function saveArchive(opts = {}) {
   showMsg('arc-form-msg', '保存成功', 'ok');
   await loadTopics();
   await loadTags();
+  loadArchiveTopics();
 
   if (opts.navigateAfterSave && savedId) {
     openArchiveDetail(savedId);
@@ -4389,6 +4480,9 @@ async function openArchiveDetail(aid) {
   metaHtml += `<span>修改: ${formatTime(a.updated_at)}</span>`;
   metaHtml += `<span>创建人: ${escapeHtml(a.created_by)}</span>`;
   $('arc-detail-meta').innerHTML = metaHtml;
+
+  // Content Description
+  renderMarkdownKatex(a.content_description || '', $('arc-detail-desc'));
 
   // Documents
   const docs = a.documents || [];
@@ -4737,6 +4831,7 @@ $('btn-topic-commit-level').addEventListener('click', () => {
 $('filter-topic').addEventListener('change', loadNotes);
 $('filter-tag').addEventListener('change', loadNotes);
 $('filter-sort').addEventListener('change', loadNotes);
+$('filter-search').addEventListener('input', debounce(loadNotes, 300));
 
 // ── Nav tabs ──
 $('nav-tabs').addEventListener('click', (e) => {
@@ -4815,6 +4910,8 @@ $('op-filter-type').addEventListener('change', loadOpinions);
 $('op-filter-sort').addEventListener('change', loadOpinions);
 $('op-filter-creator').addEventListener('change', loadOpinions);
 $('op-filter-predictor').addEventListener('change', loadOpinions);
+$('op-filter-topic').addEventListener('change', loadOpinions);
+$('op-filter-search').addEventListener('input', debounce(loadOpinions, 300));
 
 // Opinion title live preview
 $('op-title').addEventListener('input', function() {
@@ -4870,6 +4967,7 @@ $('btn-delete-archive').addEventListener('click', async () => {
 $('arc-filter-topic').addEventListener('change', loadArchives);
 $('arc-filter-tag').addEventListener('change', loadArchives);
 $('arc-filter-sort').addEventListener('change', loadArchives);
+$('arc-filter-search').addEventListener('input', debounce(loadArchives, 300));
 
 // Archive topic selector
 $('arc-topic-levels').addEventListener('change', (e) => {
@@ -5033,6 +5131,15 @@ $('btn-add-arc-question').addEventListener('click', () => {
 /* ════════════════════════════════════════════════════════════════════════
    Marked Configuration
    ════════════════════════════════════════════════════════════════════════ */
+marked.use({
+  renderer: {
+    link({ href, title, tokens }) {
+      const text = this.parser.parseInline(tokens);
+      const titleAttr = title ? ` title="${title}"` : '';
+      return `<a href="${href}" target="_blank" rel="noopener noreferrer"${titleAttr}>${text}</a>`;
+    }
+  }
+});
 marked.setOptions({ breaks: true, gfm: true });
 
 /* ════════════════════════════════════════════════════════════════════════

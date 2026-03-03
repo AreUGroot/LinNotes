@@ -45,8 +45,10 @@ curl -s -X POST http://localhost:3006/api/archives \
 - 笔记列表：`GET /api/notes?fields=metadata`
 - 观点列表：`GET /api/opinions?fields=metadata`
 - 归档列表：`GET /api/archives?fields=metadata`
-- 主题列表：`GET /api/topics`
+- 主题列表：`GET /api/topics`（支持 `?section=notes|opinions|archives` 按模块筛选）
 - 标签列表：`GET /api/tags`
+
+所有列表接口支持 `q` 参数进行模糊搜索，如 `GET /api/notes?q=关键词`。
 
 ### 中文输出
 格式化 JSON 时使用以下命令确保中文正常显示：

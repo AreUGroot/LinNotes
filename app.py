@@ -589,7 +589,15 @@ def me():
 @app.route('/api/topics', methods=['GET'])
 @_require_auth
 def list_topics():
+    section = request.args.get('section', '').strip()
     db = _get_db()
+    section_table = {'notes': 'notes', 'opinions': 'opinions', 'archives': 'archives'}
+    if section in section_table:
+        table = section_table[section]
+        rows = db.execute(
+            f"SELECT DISTINCT topic AS name FROM {table} WHERE topic != '' ORDER BY topic"
+        ).fetchall()
+        return jsonify([{'id': 0, 'name': r['name']} for r in rows])
     rows = db.execute('SELECT id, name FROM topics ORDER BY name').fetchall()
     return jsonify([{'id': r['id'], 'name': r['name']} for r in rows])
 
@@ -654,6 +662,11 @@ def list_notes():
     if topic:
         wheres.append('n.topic = ?')
         params.append(topic)
+
+    q = request.args.get('q', '').strip()
+    if q:
+        wheres.append('(n.title LIKE ? OR n.content LIKE ?)')
+        params.extend(['%' + q + '%', '%' + q + '%'])
 
     sql = base
     if joins:
@@ -991,12 +1004,16 @@ def list_opinions():
     op_type = request.args.get('type', '').strip()
     created_by = request.args.get('created_by', '').strip()
     predictor = request.args.get('predictor', '').strip()
+    topic = request.args.get('topic', '').strip()
     sort = request.args.get('sort', 'updated_desc').strip()
 
     sql = 'SELECT * FROM opinions'
     wheres = []
     params = []
 
+    if topic:
+        wheres.append('topic = ?')
+        params.append(topic)
     if op_type:
         wheres.append('type = ?')
         params.append(op_type)
@@ -1006,6 +1023,11 @@ def list_opinions():
     if predictor:
         wheres.append('predictor = ?')
         params.append(predictor)
+
+    q = request.args.get('q', '').strip()
+    if q:
+        wheres.append('(title LIKE ? OR content LIKE ?)')
+        params.extend(['%' + q + '%', '%' + q + '%'])
 
     if wheres:
         sql += ' WHERE ' + ' AND '.join(wheres)
@@ -1549,6 +1571,11 @@ def list_archives():
     if topic:
         wheres.append('a.topic = ?')
         params.append(topic)
+
+    q = request.args.get('q', '').strip()
+    if q:
+        wheres.append('(a.title LIKE ? OR a.content_description LIKE ?)')
+        params.extend(['%' + q + '%', '%' + q + '%'])
 
     sql = base
     if joins:
