@@ -347,6 +347,17 @@ def _init_db():
         except sqlite3.OperationalError:
             db.execute(f'ALTER TABLE opinions ADD COLUMN {col} {col_type} DEFAULT {default}')
 
+    # Migrate: add pinned, created_by, updated_by to project_notes
+    for col, col_type, default in [
+        ('pinned', 'INTEGER', '0'),
+        ('created_by', 'TEXT', "''"),
+        ('updated_by', 'TEXT', "''"),
+    ]:
+        try:
+            db.execute(f'SELECT {col} FROM project_notes LIMIT 1')
+        except sqlite3.OperationalError:
+            db.execute(f'ALTER TABLE project_notes ADD COLUMN {col} {col_type} DEFAULT {default}')
+
     # Fix old data: decouple topic from type name
     db.execute("UPDATE opinions SET topic = '' WHERE topic IN ('观点', '预测')")
     db.execute("UPDATE opinions SET topic = REPLACE(topic, '观点 / ', '') WHERE topic LIKE '观点 / %'")
@@ -615,7 +626,10 @@ def _project_note_to_dict(row, tags):
         'topic': row['topic'],
         'content': row['content'],
         'priority': row['priority'],
+        'pinned': bool(row['pinned']),
         'tags': tags,
+        'created_by': row['created_by'],
+        'updated_by': row['updated_by'],
         'created_at': row['created_at'],
         'updated_at': row['updated_at'],
     }
@@ -2315,7 +2329,7 @@ def list_project_notes(pid):
         'priority_desc': 'n.priority DESC, n.updated_at DESC',
         'priority_asc': 'n.priority ASC, n.updated_at DESC',
     }
-    sql += ' ORDER BY ' + sort_map.get(sort, 'n.updated_at DESC')
+    sql += ' ORDER BY n.pinned DESC, ' + sort_map.get(sort, 'n.updated_at DESC')
 
     rows = db.execute(sql, params).fetchall()
     result = []
@@ -2359,8 +2373,8 @@ def create_project_note(pid):
         _ensure_project_topic(db, pid, topic)
         _ensure_tags(db, tag_names)
         db.execute(
-            'INSERT INTO project_notes (id, project_id, title, topic, content, priority, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            (nid, pid, title, topic, content, priority, now, now)
+            'INSERT INTO project_notes (id, project_id, title, topic, content, priority, created_by, updated_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            (nid, pid, title, topic, content, priority, g.current_user, g.current_user, now, now)
         )
         _set_project_note_tags(db, nid, tag_names)
         db.commit()
@@ -2406,15 +2420,35 @@ def update_project_note(pid, nid):
         if len(content.encode('utf-8')) > MAX_CONTENT_SIZE:
             return jsonify({'error': '内容过大'}), 400
         priority = int(b.get('priority', row['priority']))
+        pinned = int(b.get('pinned', row['pinned']))
         now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')
         _ensure_project_topic(db, pid, topic)
         db.execute(
-            'UPDATE project_notes SET title = ?, topic = ?, content = ?, priority = ?, updated_at = ? WHERE id = ?',
-            (title, topic, content, priority, now, nid)
+            'UPDATE project_notes SET title = ?, topic = ?, content = ?, priority = ?, pinned = ?, updated_by = ?, updated_at = ? WHERE id = ?',
+            (title, topic, content, priority, pinned, g.current_user, now, nid)
         )
         if 'tags' in b:
             _ensure_tags(db, b['tags'])
             _set_project_note_tags(db, nid, b['tags'])
+        db.commit()
+        nr = db.execute('SELECT * FROM project_notes WHERE id = ?', (nid,)).fetchone()
+    tags = _project_note_tags(db, nid)
+    return jsonify(_project_note_to_dict(nr, tags))
+
+
+@app.route('/api/projects/<pid>/notes/<nid>/toggle-pinned', methods=['POST'])
+@_require_auth
+@_require_section('projects')
+def toggle_project_note_pinned(pid, nid):
+    with _lock:
+        db = _get_db()
+        if not _check_project_member(db, pid, g.current_user):
+            return jsonify({'error': '无权访问此项目'}), 403
+        row = db.execute('SELECT * FROM project_notes WHERE id = ? AND project_id = ?', (nid, pid)).fetchone()
+        if not row:
+            return jsonify({'error': '笔记不存在'}), 404
+        new_val = 0 if row['pinned'] else 1
+        db.execute('UPDATE project_notes SET pinned = ? WHERE id = ?', (new_val, nid))
         db.commit()
         nr = db.execute('SELECT * FROM project_notes WHERE id = ?', (nid,)).fetchone()
     tags = _project_note_tags(db, nid)
