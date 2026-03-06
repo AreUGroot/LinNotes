@@ -1291,6 +1291,9 @@ def update_opinion(oid):
         if not row:
             return jsonify({'error': '不存在'}), 404
 
+        op_type = str(b.get('type', row['type'])).strip()
+        if op_type not in VALID_OP_TYPES:
+            return jsonify({'error': '类型必须为: ' + ', '.join(VALID_OP_TYPES)}), 400
         title = str(b.get('title', row['title'])).strip()
         topic = str(b.get('topic', row['topic'])).strip()
         content = str(b.get('content', row['content']))
@@ -1307,7 +1310,6 @@ def update_opinion(oid):
         if len(content) > MAX_CONTENT_SIZE:
             return jsonify({'error': f'正文超过最大长度限制 ({MAX_CONTENT_SIZE // 1024} KB)'}), 400
 
-        op_type = row['type']
         if op_type == '反驳' and not content.strip():
             return jsonify({'error': '反驳类型必须填写正文'}), 400
         if op_type == '反驳' and not predictor:
@@ -1316,10 +1318,10 @@ def update_opinion(oid):
             return jsonify({'error': '事实类型必须填写出处描述'}), 400
 
         db.execute(
-            '''UPDATE opinions SET title=?, topic=?, content=?, predictor=?, time_scale=?,
+            '''UPDATE opinions SET type=?, title=?, topic=?, content=?, predictor=?, time_scale=?,
                rebutted_opinion=?, rebutted_source=?, fact_source=?, fact_link=?, verify_priority=?,
                updated_at=? WHERE id=?''',
-            (title, topic, content, predictor, time_scale,
+            (op_type, title, topic, content, predictor, time_scale,
              rebutted_opinion, rebutted_source, fact_source, fact_link, verify_priority,
              now, oid)
         )
