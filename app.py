@@ -347,6 +347,13 @@ def _init_db():
         except sqlite3.OperationalError:
             db.execute(f'ALTER TABLE opinions ADD COLUMN {col} {col_type} DEFAULT {default}')
 
+    # Migrate: add pinned to notes, opinions, archives
+    for tbl in ('notes', 'opinions', 'archives'):
+        try:
+            db.execute(f'SELECT pinned FROM {tbl} LIMIT 1')
+        except sqlite3.OperationalError:
+            db.execute(f'ALTER TABLE {tbl} ADD COLUMN pinned INTEGER DEFAULT 0')
+
     # Migrate: add pinned, created_by, updated_by to project_notes
     for col, col_type, default in [
         ('pinned', 'INTEGER', '0'),
@@ -486,6 +493,7 @@ def _note_to_dict(row, tags):
         'topic': row['topic'],
         'content': row['content'],
         'priority': row['priority'],
+        'pinned': bool(row['pinned']),
         'tags': tags,
         'created_at': row['created_at'],
         'updated_at': row['updated_at'],
@@ -540,6 +548,7 @@ def _archive_to_dict(row, tags):
         'content_description': row['content_description'],
         'author': row['author'],
         'body': row['body'],
+        'pinned': bool(row['pinned']),
         'tags': tags,
         'created_by': row['created_by'],
         'created_at': row['created_at'],
@@ -800,7 +809,7 @@ def list_notes():
     tag = request.args.get('tag', '').strip()
     sort = request.args.get('sort', 'updated_desc').strip()
 
-    base = 'SELECT DISTINCT n.id, n.title, n.topic, n.content, n.priority, n.created_at, n.updated_at FROM notes n'
+    base = 'SELECT DISTINCT n.id, n.title, n.topic, n.content, n.priority, n.pinned, n.created_at, n.updated_at FROM notes n'
     joins = []
     wheres = []
     params = []
@@ -834,7 +843,7 @@ def list_notes():
         'priority_desc': 'n.priority DESC, n.updated_at DESC',
         'priority_asc': 'n.priority ASC, n.updated_at DESC',
     }
-    sql += ' ORDER BY ' + sort_map.get(sort, 'n.updated_at DESC')
+    sql += ' ORDER BY n.pinned DESC, ' + sort_map.get(sort, 'n.updated_at DESC')
 
     with _lock:
         db = _get_db()
@@ -940,6 +949,23 @@ def update_note(note_id):
         row = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
 
     return jsonify({'status': 'ok', 'note': _note_to_dict(row, tags)})
+
+
+@app.route('/api/notes/<note_id>/toggle-pinned', methods=['POST'])
+@_require_auth
+@_require_section('notes')
+def toggle_note_pinned(note_id):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
+        if not row:
+            return jsonify({'error': '笔记不存在'}), 404
+        new_val = 0 if row['pinned'] else 1
+        db.execute('UPDATE notes SET pinned = ? WHERE id = ?', (new_val, note_id))
+        db.commit()
+        row = db.execute('SELECT * FROM notes WHERE id = ?', (note_id,)).fetchone()
+        tags = _note_tags(db, note_id)
+    return jsonify(_note_to_dict(row, tags))
 
 
 @app.route('/api/notes/<note_id>', methods=['DELETE'])
@@ -1132,6 +1158,10 @@ def _opinion_to_dict(row):
         d['verify_priority'] = row['verify_priority']
     except (IndexError, KeyError):
         d['verify_priority'] = 0
+    try:
+        d['pinned'] = bool(row['pinned'])
+    except (IndexError, KeyError):
+        d['pinned'] = False
     return d
 
 
@@ -1196,7 +1226,9 @@ def list_opinions():
     # For rating/measure_time sort, we sort in Python after fetching
     db_sort = sort_map.get(sort, '')
     if db_sort:
-        sql += ' ORDER BY ' + db_sort
+        sql += ' ORDER BY pinned DESC, ' + db_sort
+    else:
+        sql += ' ORDER BY pinned DESC'
 
     with _lock:
         db = _get_db()
@@ -1209,13 +1241,14 @@ def list_opinions():
             result.append(d)
 
     if sort == 'rating_desc':
-        result.sort(key=lambda x: x['avg_rating'], reverse=True)
+        result.sort(key=lambda x: (-x['pinned'], -x['avg_rating']))
     elif sort == 'rating_asc':
-        result.sort(key=lambda x: x['avg_rating'])
+        result.sort(key=lambda x: (-x['pinned'], x['avg_rating']))
     elif sort == 'measure_time_desc':
-        result.sort(key=lambda x: x['measure_time'] or '', reverse=True)
+        result.sort(key=lambda x: (-x['pinned'], x['measure_time'] or ''), reverse=True)
+        result.sort(key=lambda x: -x['pinned'])
     elif sort == 'measure_time_asc':
-        result.sort(key=lambda x: x['measure_time'] or '')
+        result.sort(key=lambda x: (-x['pinned'], x['measure_time'] or ''))
 
     if request.args.get('fields') == 'metadata':
         for item in result:
@@ -1346,6 +1379,25 @@ def update_opinion(oid):
     d['avg_rating'] = _opinion_avg_rating(db, oid)
     d['measure_time'] = _opinion_latest_measure_time(db, oid)
     return jsonify({'status': 'ok', 'opinion': d})
+
+
+@app.route('/api/opinions/<oid>/toggle-pinned', methods=['POST'])
+@_require_auth
+@_require_section('opinions')
+def toggle_opinion_pinned(oid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM opinions WHERE id = ?', (oid,)).fetchone()
+        if not row:
+            return jsonify({'error': '不存在'}), 404
+        new_val = 0 if row['pinned'] else 1
+        db.execute('UPDATE opinions SET pinned = ? WHERE id = ?', (new_val, oid))
+        db.commit()
+        row = db.execute('SELECT * FROM opinions WHERE id = ?', (oid,)).fetchone()
+    d = _opinion_to_dict(row)
+    d['avg_rating'] = _opinion_avg_rating(db, oid)
+    d['measure_time'] = _opinion_latest_measure_time(db, oid)
+    return jsonify(d)
 
 
 @app.route('/api/opinions/<oid>', methods=['DELETE'])
@@ -1747,7 +1799,9 @@ def list_archives():
     }
     db_sort = sort_map.get(sort, '')
     if db_sort:
-        sql += ' ORDER BY ' + db_sort
+        sql += ' ORDER BY a.pinned DESC, ' + db_sort
+    else:
+        sql += ' ORDER BY a.pinned DESC'
 
     with _lock:
         db = _get_db()
@@ -1761,9 +1815,9 @@ def list_archives():
             result.append(d)
 
     if sort == 'rating_desc':
-        result.sort(key=lambda x: x['avg_rating'], reverse=True)
+        result.sort(key=lambda x: (-x['pinned'], -x['avg_rating']))
     elif sort == 'rating_asc':
-        result.sort(key=lambda x: x['avg_rating'])
+        result.sort(key=lambda x: (-x['pinned'], x['avg_rating']))
 
     if request.args.get('fields') == 'metadata':
         for item in result:
@@ -1877,6 +1931,26 @@ def update_archive(aid):
     d['avg_rating'] = _archive_avg_rating(db, aid)
     d['documents'] = _archive_documents(db, aid)
     return jsonify({'status': 'ok', 'archive': d})
+
+
+@app.route('/api/archives/<aid>/toggle-pinned', methods=['POST'])
+@_require_auth
+@_require_section('archives')
+def toggle_archive_pinned(aid):
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM archives WHERE id = ?', (aid,)).fetchone()
+        if not row:
+            return jsonify({'error': '归档不存在'}), 404
+        new_val = 0 if row['pinned'] else 1
+        db.execute('UPDATE archives SET pinned = ? WHERE id = ?', (new_val, aid))
+        db.commit()
+        row = db.execute('SELECT * FROM archives WHERE id = ?', (aid,)).fetchone()
+        tags = _archive_tags(db, aid)
+    d = _archive_to_dict(row, tags)
+    d['avg_rating'] = _archive_avg_rating(db, aid)
+    d['documents'] = _archive_documents(db, aid)
+    return jsonify(d)
 
 
 @app.route('/api/archives/<aid>', methods=['DELETE'])

@@ -439,6 +439,20 @@ button {
   border-color: #c3cbf7;
   box-shadow: 0 4px 16px rgba(90,103,216,0.1);
 }
+.btn-pin-list {
+  background: none;
+  border: 1px solid var(--bdr);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 2px 8px;
+  font-size: 0.85rem;
+  opacity: 0.4;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+  margin-left: 8px;
+}
+.note-card:hover .btn-pin-list { opacity: 0.7; }
+.btn-pin-list:hover { opacity: 1 !important; background: var(--bg); }
 .note-card-title {
   font-size: 1.05rem;
   font-weight: 600;
@@ -1465,6 +1479,7 @@ button {
     <div class="detail-meta" id="detail-meta"></div>
   </div>
   <div class="detail-actions">
+    <button class="btn-ghost" id="btn-pin-note">📌 置顶</button>
     <button class="btn-primary" id="btn-edit-note">编辑</button>
     <button class="btn-danger" id="btn-delete-note">删除</button>
   </div>
@@ -1642,6 +1657,7 @@ button {
     <div class="detail-meta" id="op-detail-meta"></div>
   </div>
   <div class="detail-actions">
+    <button class="btn-ghost" id="btn-pin-opinion">📌 置顶</button>
     <button class="btn-primary" id="btn-edit-opinion">编辑</button>
     <button class="btn-danger" id="btn-delete-opinion">删除</button>
   </div>
@@ -1788,6 +1804,7 @@ button {
     <div class="detail-meta" id="arc-detail-meta"></div>
   </div>
   <div class="detail-actions" style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn-ghost" id="btn-pin-archive">📌 置顶</button>
     <button class="btn-primary" id="btn-edit-archive">编辑</button>
     <button class="btn-danger" id="btn-delete-archive">删除</button>
   </div>
@@ -1943,6 +1960,7 @@ button {
     <div class="detail-meta" id="proj-detail-meta"></div>
   </div>
   <div class="detail-actions" style="display:flex;gap:8px;margin-bottom:16px;">
+    <button class="btn-ghost" id="btn-pin-proj-note">📌 置顶</button>
     <button class="btn-primary" id="btn-edit-proj-note">编辑</button>
     <button class="btn-danger" id="btn-delete-proj-note">删除</button>
   </div>
@@ -3373,8 +3391,13 @@ function renderNoteList() {
       '<span class="badge-tag">' + escapeHtml(t) + '</span>'
     ).join('');
 
+    const pinLabel = note.pinned ? '取消置顶' : '置顶';
+    const pinIcon = note.pinned ? '<span title="已置顶" style="margin-right:4px">📌</span>' : '';
     return '<div class="note-card" data-id="' + note.id + '">' +
-      '<div class="note-card-title" data-katex>' + escapeHtml(note.title) + '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+        '<div class="note-card-title" data-katex style="flex:1">' + pinIcon + escapeHtml(note.title) + '</div>' +
+        '<button class="btn-pin-list" data-pin-id="' + note.id + '" title="' + pinLabel + '">📌</button>' +
+      '</div>' +
       '<div class="note-card-meta">' +
         '<span class="badge-topic">' + escapeHtml(formatTopicLabel(note.topic)) + '</span>' +
         tagsHtml +
@@ -3388,6 +3411,16 @@ function renderNoteList() {
   // Render KaTeX in titles
   container.querySelectorAll('[data-katex]').forEach(el => {
     renderMathInElement(el, KATEX_OPTS);
+  });
+
+  // Pin button handlers
+  container.querySelectorAll('.btn-pin-list').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.pinId;
+      const res = await apiFetch('/api/notes/' + id + '/toggle-pinned', { method: 'POST' });
+      if (res.ok) loadNotes();
+    });
   });
 
   // Click handlers
@@ -3656,6 +3689,8 @@ async function openNoteDetail(noteId) {
       renderStars(note.priority) +
       '<span>创建: ' + formatTime(note.created_at) + '</span>' +
       '<span>修改: ' + formatTime(note.updated_at) + '</span>';
+
+    $('btn-pin-note').textContent = note.pinned ? '📌 取消置顶' : '📌 置顶';
 
     // Body
     renderMarkdownKatex(note.content || '', $('detail-body'));
@@ -4177,8 +4212,13 @@ function renderOpinionList() {
       if (op.avg_rating) extraHtml += '<span>观点质量: ' + renderStars(Math.round(op.avg_rating)) + '</span>';
     }
 
+    const pinIcon = op.pinned ? '<span title="已置顶" style="margin-right:4px">📌</span>' : '';
+    const pinLabel = op.pinned ? '取消置顶' : '置顶';
     return '<div class="note-card" data-opinion-id="' + op.id + '">' +
-      '<div class="note-card-title" data-katex>' + escapeHtml(op.title || '(无标题)') + '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+        '<div class="note-card-title" data-katex style="flex:1">' + pinIcon + escapeHtml(op.title || '(无标题)') + '</div>' +
+        '<button class="btn-pin-list" data-pin-id="' + op.id + '" title="' + pinLabel + '">📌</button>' +
+      '</div>' +
       '<div class="note-card-meta">' +
         '<span class="badge-type ' + typeClass + '">' + escapeHtml(op.type) + '</span>' +
         (op.topic ? '<span class="badge-topic">' + escapeHtml(formatTopicLabel(op.topic)) + '</span>' : '') +
@@ -4190,6 +4230,15 @@ function renderOpinionList() {
 
   container.querySelectorAll('[data-katex]').forEach(el => {
     renderMathInElement(el, KATEX_OPTS);
+  });
+
+  container.querySelectorAll('.btn-pin-list').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.pinId;
+      const res = await apiFetch('/api/opinions/' + id + '/toggle-pinned', { method: 'POST' });
+      if (res.ok) loadOpinions();
+    });
   });
 
   container.querySelectorAll('.note-card').forEach(card => {
@@ -4400,6 +4449,8 @@ async function openOpinionDetail(oid) {
     metaHtml += '<span>创建: ' + formatTime(op.created_at) + '</span>' +
       '<span>修改: ' + formatTime(op.updated_at) + '</span>';
     $('op-detail-meta').innerHTML = metaHtml;
+
+    $('btn-pin-opinion').textContent = op.pinned ? '📌 取消置顶' : '📌 置顶';
 
     // Body - show type-specific fields before content
     let bodyPrefix = '';
@@ -4903,7 +4954,9 @@ function renderArchiveList() {
     return;
   }
   container.innerHTML = allArchives.map(a => {
-    const titleHtml = a.title ? `<div class="note-card-title">${escapeHtml(a.title)}</div>` : '';
+    const pinIcon = a.pinned ? '<span title="已置顶" style="margin-right:4px">📌</span>' : '';
+    const pinLabel = a.pinned ? '取消置顶' : '置顶';
+    const titleText = a.title ? escapeHtml(a.title) : '(无标题)';
     const descSnippet = a.content_description.length > 120
       ? escapeHtml(a.content_description.slice(0, 120)) + '...'
       : escapeHtml(a.content_description);
@@ -4915,7 +4968,10 @@ function renderArchiveList() {
     if (a.document_count > 0) metaHtml += `<span>📎 ${a.document_count}</span>`;
     metaHtml += `<span>${formatTime(a.updated_at)}</span>`;
     return `<div class="note-card" data-arc-id="${a.id}">
-      ${titleHtml}
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div class="note-card-title" style="flex:1">${pinIcon}${titleText}</div>
+        <button class="btn-pin-list" data-pin-id="${a.id}" title="${pinLabel}">📌</button>
+      </div>
       <div style="font-size:0.88rem;color:var(--sub);margin-bottom:8px;line-height:1.6;">${descSnippet}</div>
       <div class="note-card-meta">${metaHtml}</div>
     </div>`;
@@ -5071,6 +5127,8 @@ async function openArchiveDetail(aid) {
   metaHtml += `<span>修改: ${formatTime(a.updated_at)}</span>`;
   metaHtml += `<span>创建人: ${escapeHtml(a.created_by)}</span>`;
   $('arc-detail-meta').innerHTML = metaHtml;
+
+  $('btn-pin-archive').textContent = a.pinned ? '📌 取消置顶' : '📌 置顶';
 
   // Content Description
   renderMarkdownKatex(a.content_description || '', $('arc-detail-desc'));
@@ -5671,18 +5729,33 @@ function renderProjectNoteList() {
     const tagsHtml = (note.tags || []).map(t =>
       '<span class="badge-tag">' + escapeHtml(t) + '</span>'
     ).join('');
+    const pinIcon = note.pinned ? '<span title="已置顶" style="margin-right:4px">📌</span>' : '';
+    const pinLabel = note.pinned ? '取消置顶' : '置顶';
     return '<div class="note-card" data-id="' + note.id + '">' +
-      '<div class="note-card-title" data-katex>' + escapeHtml(note.title || '(无标题)') + '</div>' +
+      '<div style="display:flex;justify-content:space-between;align-items:flex-start;">' +
+        '<div class="note-card-title" data-katex style="flex:1">' + pinIcon + escapeHtml(note.title || '(无标题)') + '</div>' +
+        '<button class="btn-pin-list" data-pin-id="' + note.id + '" title="' + pinLabel + '">📌</button>' +
+      '</div>' +
       '<div class="note-card-meta">' +
         '<span class="badge-topic">' + escapeHtml(formatTopicLabel(note.topic)) + '</span>' +
         tagsHtml +
         renderStars(note.priority) +
+        (note.created_by ? '<span>创建人: ' + escapeHtml(note.created_by) + '</span>' : '') +
+        (note.updated_by ? '<span>修改人: ' + escapeHtml(note.updated_by) + '</span>' : '') +
         '<span>创建: ' + formatTime(note.created_at) + '</span>' +
         '<span>修改: ' + formatTime(note.updated_at) + '</span>' +
       '</div>' +
     '</div>';
   }).join('');
   container.querySelectorAll('[data-katex]').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  container.querySelectorAll('.btn-pin-list').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.pinId;
+      const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + id + '/toggle-pinned', { method: 'POST' });
+      if (res.ok) loadProjectNotes();
+    });
+  });
   container.querySelectorAll('.note-card').forEach(card => {
     card.addEventListener('click', () => openProjectNoteDetail(card.dataset.id));
   });
@@ -5839,8 +5912,13 @@ async function openProjectNoteDetail(noteId) {
     '<span class="badge-topic">' + escapeHtml(formatTopicLabel(note.topic)) + '</span>' +
     tagsHtml +
     renderStars(note.priority) +
+    (note.created_by ? '<span>创建人: ' + escapeHtml(note.created_by) + '</span>' : '') +
+    (note.updated_by ? '<span>修改人: ' + escapeHtml(note.updated_by) + '</span>' : '') +
     '<span>创建: ' + formatTime(note.created_at) + '</span>' +
     '<span>修改: ' + formatTime(note.updated_at) + '</span>';
+
+  const pinBtn = $('btn-pin-proj-note');
+  pinBtn.textContent = note.pinned ? '📌 取消置顶' : '📌 置顶';
 
   renderMarkdownKatex(note.content || '', $('proj-detail-body'));
   loadProjComments(noteId);
@@ -6019,6 +6097,14 @@ $('btn-add-note').addEventListener('click', openCreateForm);
 $('btn-back-to-list').addEventListener('click', () => showView('list'));
 $('btn-back-from-detail').addEventListener('click', () => showView('list'));
 
+$('btn-pin-note').addEventListener('click', async () => {
+  if (!viewingNoteId) return;
+  const res = await apiFetch('/api/notes/' + viewingNoteId + '/toggle-pinned', { method: 'POST' });
+  if (!res.ok) { alert('操作失败'); return; }
+  const note = await res.json();
+  $('btn-pin-note').textContent = note.pinned ? '📌 取消置顶' : '📌 置顶';
+});
+
 $('btn-edit-note').addEventListener('click', () => {
   if (viewingNoteId) openEditForm(viewingNoteId);
 });
@@ -6137,6 +6223,14 @@ $('op-verify-priority-stars').addEventListener('click', (e) => {
 $('btn-save-opinion').addEventListener('click', () => saveOpinion({ navigateAfterSave: false }));
 $('btn-save-opinion-open').addEventListener('click', () => saveOpinion({ navigateAfterSave: true }));
 
+$('btn-pin-opinion').addEventListener('click', async () => {
+  if (!viewingOpinionId) return;
+  const res = await apiFetch('/api/opinions/' + viewingOpinionId + '/toggle-pinned', { method: 'POST' });
+  if (!res.ok) { alert('操作失败'); return; }
+  const op = await res.json();
+  $('btn-pin-opinion').textContent = op.pinned ? '📌 取消置顶' : '📌 置顶';
+});
+
 $('btn-edit-opinion').addEventListener('click', () => {
   if (viewingOpinionId) openOpinionEditForm(viewingOpinionId);
 });
@@ -6224,6 +6318,14 @@ $('btn-back-from-arc-detail').addEventListener('click', () => { loadArchives(); 
 
 $('btn-save-archive').addEventListener('click', () => saveArchive({ navigateAfterSave: false }));
 $('btn-save-archive-open').addEventListener('click', () => saveArchive({ navigateAfterSave: true }));
+
+$('btn-pin-archive').addEventListener('click', async () => {
+  if (!viewingArchiveId) return;
+  const res = await apiFetch('/api/archives/' + viewingArchiveId + '/toggle-pinned', { method: 'POST' });
+  if (!res.ok) { alert('操作失败'); return; }
+  const a = await res.json();
+  $('btn-pin-archive').textContent = a.pinned ? '📌 取消置顶' : '📌 置顶';
+});
 
 $('btn-edit-archive').addEventListener('click', () => {
   if (viewingArchiveId) openArchiveEditForm(viewingArchiveId);
@@ -6359,7 +6461,15 @@ $('arc-rating-history').addEventListener('click', (e) => {
 });
 
 // Archive list card click
-$('archive-list').addEventListener('click', (e) => {
+$('archive-list').addEventListener('click', async (e) => {
+  const pinBtn = e.target.closest('.btn-pin-list');
+  if (pinBtn) {
+    e.stopPropagation();
+    const id = pinBtn.dataset.pinId;
+    const res = await apiFetch('/api/archives/' + id + '/toggle-pinned', { method: 'POST' });
+    if (res.ok) loadArchives();
+    return;
+  }
   const card = e.target.closest('[data-arc-id]');
   if (card) openArchiveDetail(card.dataset.arcId);
 });
@@ -6415,6 +6525,14 @@ $('btn-back-from-proj-detail').addEventListener('click', () => { loadProjectNote
 
 $('btn-save-proj-note').addEventListener('click', () => saveProjNote({ navigateAfterSave: false }));
 $('btn-save-proj-note-and-open').addEventListener('click', () => saveProjNote({ navigateAfterSave: true }));
+
+$('btn-pin-proj-note').addEventListener('click', async () => {
+  if (!viewingProjNoteId || !currentProjectId) return;
+  const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + viewingProjNoteId + '/toggle-pinned', { method: 'POST' });
+  if (!res.ok) { alert('操作失败'); return; }
+  const note = await res.json();
+  $('btn-pin-proj-note').textContent = note.pinned ? '📌 取消置顶' : '📌 置顶';
+});
 
 $('btn-edit-proj-note').addEventListener('click', () => {
   if (viewingProjNoteId) openProjEditForm(viewingProjNoteId);
