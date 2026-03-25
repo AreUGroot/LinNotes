@@ -674,6 +674,41 @@ button {
 .vditor-shell .vditor-reset {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
+
+/* Restore markdown paragraph spacing after the global reset zeroes block margins. */
+.render-box p,
+.render-box li p,
+.vditor-shell .vditor-reset p,
+.vditor-shell .vditor-reset li p {
+  margin-top: 0;
+  margin-bottom: 0.95em;
+}
+
+.render-box p:last-child,
+.render-box li p:last-child,
+.vditor-shell .vditor-reset p:last-child,
+.vditor-shell .vditor-reset li p:last-child {
+  margin-bottom: 0;
+}
+
+.render-box li + li,
+.vditor-shell .vditor-reset li + li {
+  margin-top: 0.3em;
+}
+
+.render-box li > p + p,
+.vditor-shell .vditor-reset li > p + p {
+  margin-top: 0.7em;
+}
+
+.render-box ul,
+.render-box ol,
+.vditor-shell .vditor-reset ul,
+.vditor-shell .vditor-reset ol {
+  margin-top: 0.4em;
+  margin-bottom: 0.9em;
+}
+
 .editor-split.vditor-fallback-hidden { display: none; }
 .vditor--fullscreen { z-index: 200 !important; }
 
@@ -865,12 +900,86 @@ button {
 }
 .cq-icon.question { color: #d97706; }
 .cq-icon.resolved { color: #38a169; }
-.cq-item-body {
+.cq-item-body,
+.cq-content,
+.cq-input-box .cq-input-preview {
   line-height: 1.8;
   font-size: 0.92rem;
   word-break: break-word;
+  overflow-x: auto;
 }
-.cq-item-body .katex-display { margin: 6px 0; }
+.cq-item-body > :first-child,
+.cq-content > :first-child,
+.cq-input-box .cq-input-preview > :first-child {
+  margin-top: 0;
+}
+.cq-item-body > :last-child,
+.cq-content > :last-child,
+.cq-input-box .cq-input-preview > :last-child {
+  margin-bottom: 0;
+}
+.cq-item-body p,
+.cq-content p,
+.cq-input-box .cq-input-preview p {
+  margin: 0 0 0.85em;
+}
+.cq-item-body ul,
+.cq-item-body ol,
+.cq-content ul,
+.cq-content ol,
+.cq-input-box .cq-input-preview ul,
+.cq-input-box .cq-input-preview ol {
+  margin: 0.45em 0 0.85em;
+  padding-left: 1.6em;
+}
+.cq-item-body blockquote,
+.cq-content blockquote,
+.cq-input-box .cq-input-preview blockquote {
+  margin: 0.6em 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--pri);
+  color: var(--sub);
+}
+.cq-item-body pre,
+.cq-content pre,
+.cq-input-box .cq-input-preview pre {
+  margin: 0.7em 0;
+  padding: 10px 12px;
+  border: 1px solid var(--bdr);
+  border-radius: 8px;
+  background: #f7fafc;
+  overflow-x: auto;
+}
+.cq-item-body code,
+.cq-content code,
+.cq-input-box .cq-input-preview code {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #edf2f7;
+}
+.cq-item-body pre code,
+.cq-content pre code,
+.cq-input-box .cq-input-preview pre code {
+  padding: 0;
+  background: none;
+}
+.cq-item-body img,
+.cq-content img,
+.cq-input-box .cq-input-preview img {
+  max-width: 100%;
+}
+.cq-item-body a,
+.cq-content a,
+.cq-input-box .cq-input-preview a {
+  color: var(--pri);
+  text-decoration: underline;
+  word-break: break-all;
+}
+.cq-item-body .katex-display,
+.cq-content .katex-display,
+.cq-input-box .cq-input-preview .katex-display {
+  margin: 6px 0;
+}
 .cq-item-actions {
   display: flex;
   gap: 8px;
@@ -927,11 +1036,7 @@ button {
   border: 1px solid var(--bdr);
   border-radius: 8px;
   min-height: 36px;
-  line-height: 1.8;
-  font-size: 0.92rem;
-  word-break: break-word;
 }
-.cq-input-box .cq-input-preview .katex-display { margin: 4px 0; }
 .cq-input-actions {
   display: flex;
   gap: 8px;
@@ -1308,7 +1413,7 @@ button {
 .vditor-shell .vditor-reset br {
   display: block;
   content: '';
-  margin-top: 0.5em;
+  margin-top: 0.85em;
 }
 
 /* ── Vditor toolbar sticky below fixed nav ────────────────────────────── */
@@ -3092,6 +3197,14 @@ function renderMarkdownKatex(src, container, opts = {}) {
   container.innerHTML = html;
 }
 
+function renderCQMarkdownNodes(container) {
+  if (!container) return;
+  container.querySelectorAll('[data-cq-markdown]').forEach((el) => {
+    renderMarkdownKatex(el.textContent || '', el);
+    el.removeAttribute('data-cq-markdown');
+  });
+}
+
 let isSyncingEditorPreviewScroll = false;
 let isDraggingEditorResizer = false;
 
@@ -3911,8 +4024,7 @@ function createCQInputBox(opts) {
     if (!text) {
       preview.innerHTML = '<span class="empty-hint">实时预览</span>';
     } else {
-      preview.textContent = text;
-      renderMathInElement(preview, KATEX_OPTS);
+      renderMarkdownKatex(text, preview);
     }
   });
 
@@ -3969,11 +4081,7 @@ function renderComments(comments, noteId) {
   });
 
   container.innerHTML = html || '';
-
-  // KaTeX in comment bodies
-  container.querySelectorAll('.cq-item-body').forEach(el => {
-    renderMathInElement(el, KATEX_OPTS);
-  });
+  renderCQMarkdownNodes(container);
 
   // Reply buttons
   container.querySelectorAll('.btn-reply-comment').forEach(btn => {
@@ -4035,7 +4143,7 @@ function renderCommentItem(c, isReply) {
       '<span class="cq-icon">💬</span>' +
       '<span>' + formatTime(c.created_at) + '</span>' +
     '</div>' +
-    '<div class="cq-item-body">' + escapeHtml(c.content) + '</div>' +
+    '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(c.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : '<button class="btn-reply-comment" data-id="' + c.id + '">回复</button>') +
       '<button class="btn-delete-comment btn-delete-cq" data-id="' + c.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
@@ -4072,11 +4180,7 @@ function renderQuestions(questions, noteId) {
   });
 
   container.innerHTML = html || '';
-
-  // KaTeX
-  container.querySelectorAll('.cq-item-body').forEach(el => {
-    renderMathInElement(el, KATEX_OPTS);
-  });
+  renderCQMarkdownNodes(container);
 
   // Toggle resolved
   container.querySelectorAll('.btn-toggle-resolved').forEach(btn => {
@@ -4154,7 +4258,7 @@ function renderQuestionItem(q, isReply) {
       '<span>' + formatTime(q.created_at) + '</span>' +
       (q.resolved && !isReply ? '<span style="color:#38a169;font-weight:600;">已解决</span>' : '') +
     '</div>' +
-    '<div class="cq-item-body">' + escapeHtml(q.content) + '</div>' +
+    '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(q.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : resolveBtn + '<button class="btn-reply-question" data-id="' + q.id + '">回复</button>') +
       '<button class="btn-delete-question btn-delete-cq" data-id="' + q.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
@@ -4627,10 +4731,7 @@ function renderOpinionComments(comments, oid) {
   });
 
   container.innerHTML = html || '';
-
-  container.querySelectorAll('.cq-item-body').forEach(el => {
-    renderMathInElement(el, KATEX_OPTS);
-  });
+  renderCQMarkdownNodes(container);
 
   container.querySelectorAll('.btn-reply-op-comment').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -4679,7 +4780,7 @@ function renderOpCommentItem(c, isReply) {
       '<span>' + author + '</span>' +
       '<span>' + formatTime(c.created_at) + '</span>' +
     '</div>' +
-    '<div class="cq-item-body">' + escapeHtml(c.content) + '</div>' +
+    '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(c.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : '<button class="btn-reply-op-comment" data-id="' + c.id + '">回复</button>') +
       '<button class="btn-delete-op-comment btn-delete-cq" data-id="' + c.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
@@ -4716,10 +4817,7 @@ function renderOpinionQuestions(questions, oid) {
   });
 
   container.innerHTML = html || '';
-
-  container.querySelectorAll('.cq-item-body').forEach(el => {
-    renderMathInElement(el, KATEX_OPTS);
-  });
+  renderCQMarkdownNodes(container);
 
   container.querySelectorAll('.btn-toggle-op-resolved').forEach(btn => {
     btn.addEventListener('click', async () => {
@@ -4784,7 +4882,7 @@ function renderOpQuestionItem(q, isReply) {
       '<span>' + formatTime(q.created_at) + '</span>' +
       (q.resolved && !isReply ? '<span style="color:#38a169;font-weight:600;">已解决</span>' : '') +
     '</div>' +
-    '<div class="cq-item-body">' + escapeHtml(q.content) + '</div>' +
+    '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(q.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : resolveBtn + '<button class="btn-reply-op-question" data-id="' + q.id + '">回复</button>') +
       '<button class="btn-delete-op-question btn-delete-cq" data-id="' + q.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
@@ -5265,7 +5363,7 @@ function renderArcComments(comments, aid) {
     });
   });
   container.innerHTML = html;
-  container.querySelectorAll('.cq-item-body').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  renderCQMarkdownNodes(container);
 }
 
 function renderArcCommentItem(c, isReply) {
@@ -5275,7 +5373,7 @@ function renderArcCommentItem(c, isReply) {
       ${c.created_by ? '<strong>' + escapeHtml(c.created_by) + '</strong>' : ''}
       <span>${formatTime(c.created_at)}</span>
     </div>
-    <div class="cq-item-body">${escapeHtml(c.content)}</div>
+    <div class="cq-item-body" data-cq-markdown>${escapeHtml(c.content)}</div>
     <div class="cq-item-actions">
       <button onclick="arcCommentReply('${c.id}')">回复</button>
       <button class="btn-delete-cq" onclick="deleteArcComment('${c.id}')">删除</button>
@@ -5339,7 +5437,7 @@ function renderArcQuestions(questions, aid) {
     });
   });
   container.innerHTML = html;
-  container.querySelectorAll('.cq-item-body').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  renderCQMarkdownNodes(container);
 }
 
 function renderArcQuestionItem(q, isReply) {
@@ -5354,7 +5452,7 @@ function renderArcQuestionItem(q, isReply) {
       ${q.created_by ? '<strong>' + escapeHtml(q.created_by) + '</strong>' : ''}
       <span>${formatTime(q.created_at)}</span>
     </div>
-    <div class="cq-item-body">${escapeHtml(q.content)}</div>
+    <div class="cq-item-body" data-cq-markdown>${escapeHtml(q.content)}</div>
     <div class="cq-item-actions">
       ${toggleBtn}
       <button onclick="arcQuestionReply('${q.id}')">回复</button>
@@ -5990,7 +6088,7 @@ function renderProjComments(comments, noteId) {
     html += renderProjCQItem(c, 'comment', noteId, byParent);
   }
   container.innerHTML = html;
-  container.querySelectorAll('[data-katex]').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  renderCQMarkdownNodes(container);
   container.querySelectorAll('.cq-reply-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const parentId = btn.dataset.parentId;
@@ -6032,13 +6130,13 @@ function renderProjCQItem(item, type, noteId, byParent) {
   actionsHtml += ` <span class="cq-delete-btn" data-id="${item.id}" style="cursor:pointer;font-size:0.8rem;color:#e53e3e;">删除</span>`;
   let html = `<div class="cq-item"><div class="cq-icon">${icon}</div><div class="cq-body">`;
   html += `<div class="cq-meta">${item.created_by ? escapeHtml(item.created_by) + ' · ' : ''}${formatTime(item.created_at)}</div>`;
-  html += `<div class="cq-content" data-katex>${escapeHtml(item.content)}</div>`;
+  html += `<div class="cq-content" data-cq-markdown>${escapeHtml(item.content)}</div>`;
   html += `<div class="cq-actions">${actionsHtml}</div>`;
   html += `<div class="cq-reply-area"></div>`;
   for (const r of replies) {
     html += `<div class="cq-item is-reply"><div class="cq-icon">${icon}</div><div class="cq-body">`;
     html += `<div class="cq-meta">${r.created_by ? escapeHtml(r.created_by) + ' · ' : ''}${formatTime(r.created_at)}</div>`;
-    html += `<div class="cq-content" data-katex>${escapeHtml(r.content)}</div>`;
+    html += `<div class="cq-content" data-cq-markdown>${escapeHtml(r.content)}</div>`;
     html += `<div class="cq-actions"><span class="cq-delete-btn" data-id="${r.id}" style="cursor:pointer;font-size:0.8rem;color:#e53e3e;">删除</span></div>`;
     html += `</div></div>`;
   }
@@ -6072,7 +6170,7 @@ function renderProjQuestions(questions, noteId) {
     html += renderProjCQItem(q, 'question', noteId, byParent);
   }
   container.innerHTML = html;
-  container.querySelectorAll('[data-katex]').forEach(el => renderMathInElement(el, KATEX_OPTS));
+  renderCQMarkdownNodes(container);
   container.querySelectorAll('.cq-reply-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const parentId = btn.dataset.parentId;
