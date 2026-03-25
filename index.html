@@ -5920,6 +5920,9 @@ async function saveProjNote(options = {}) {
       return;
     }
     const saved = await res.json();
+    if (!editingProjNoteId && saved.id) {
+      editingProjNoteId = saved.id;
+    }
     showMsg('proj-form-msg', '保存成功！', 'ok');
     await loadProjectTopics();
     await loadTags();
