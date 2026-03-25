@@ -20,7 +20,7 @@
   --sub:   #718096;
   --bdr:   #e2e8f0;
   --card:  #ffffff;
-  --nav-h: 56px;
+  --nav-h: 44px;
 }
 
 [data-theme="dark"] {
@@ -670,7 +670,7 @@ button {
 .vditor-shell .vditor {
   border: 1px solid var(--bdr);
   border-radius: 12px;
-  overflow: hidden;
+  overflow: clip;
 }
 .vditor-shell .vditor-reset {
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -1304,6 +1304,27 @@ button {
   max-width: 900px;
   margin: 0 auto;
 }
+
+/* ── Vditor Shift+Enter (br) spacing ─────────────────────────────────── */
+.vditor-shell .vditor-reset br {
+  display: block;
+  content: '';
+  margin-top: 0.5em;
+}
+
+/* ── Vditor toolbar sticky below fixed nav ───────────────────────────── */
+.vditor-shell .vditor-toolbar--pin {
+  top: var(--nav-h) !important;
+  z-index: 2;
+}
+
+/* ── Vditor outline sticky ───────────────────────────────────────────── */
+.vditor-shell .vditor-outline {
+  position: sticky;
+  top: calc(var(--nav-h) + 38px);
+  align-self: flex-start;
+  max-height: calc(100vh - var(--nav-h) - 38px);
+}
 </style>
 </head>
 <body>
@@ -1390,7 +1411,7 @@ button {
 <!-- ── View: Note Form (Create/Edit) ───────────────────────────────────── -->
 <div id="view-form" class="page">
   <div class="form-header">
-    <button class="btn-ghost" id="btn-back-to-list">← 返回</button>
+    <button class="btn-ghost" id="btn-back-to-list">返回</button>
     <h2 id="form-title-label">添加笔记</h2>
   </div>
 
@@ -1472,7 +1493,7 @@ button {
 <!-- ── View: Note Detail ───────────────────────────────────────────────── -->
 <div id="view-detail" class="page">
   <div class="detail-back">
-    <button class="btn-ghost" id="btn-back-from-detail">← 返回列表</button>
+    <button class="btn-ghost" id="btn-back-from-detail">返回列表</button>
   </div>
   <div class="detail-header">
     <div class="detail-title" id="detail-title"></div>
@@ -1480,6 +1501,7 @@ button {
   </div>
   <div class="detail-actions">
     <button class="btn-ghost" id="btn-pin-note">📌 置顶</button>
+    <button class="btn-ghost" id="btn-dl-note">下载 .md</button>
     <button class="btn-primary" id="btn-edit-note">编辑</button>
     <button class="btn-danger" id="btn-delete-note">删除</button>
   </div>
@@ -1549,7 +1571,7 @@ button {
 <!-- ── View: Opinions Form ─────────────────────────────────────────────── -->
 <div id="view-opinions-form" class="page">
   <div class="form-header">
-    <button class="btn-ghost" id="btn-back-to-op-list">← 返回</button>
+    <button class="btn-ghost" id="btn-back-to-op-list">返回</button>
     <h2 id="op-form-title-label">添加观点/预测</h2>
   </div>
 
@@ -1650,7 +1672,7 @@ button {
 <!-- ── View: Opinions Detail ───────────────────────────────────────────── -->
 <div id="view-opinions-detail" class="page">
   <div class="detail-back">
-    <button class="btn-ghost" id="btn-back-from-op-detail">← 返回列表</button>
+    <button class="btn-ghost" id="btn-back-from-op-detail">返回列表</button>
   </div>
   <div class="detail-header">
     <div class="detail-title" id="op-detail-title"></div>
@@ -1658,6 +1680,7 @@ button {
   </div>
   <div class="detail-actions">
     <button class="btn-ghost" id="btn-pin-opinion">📌 置顶</button>
+    <button class="btn-ghost" id="btn-dl-opinion">下载 .md</button>
     <button class="btn-primary" id="btn-edit-opinion">编辑</button>
     <button class="btn-danger" id="btn-delete-opinion">删除</button>
   </div>
@@ -1732,7 +1755,7 @@ button {
 <!-- ── View: Archive Form ────────────────────────────────────────────── -->
 <div id="view-archives-form" class="page">
   <div class="form-header">
-    <button class="btn-ghost" id="btn-back-to-arc-list">← 返回</button>
+    <button class="btn-ghost" id="btn-back-to-arc-list">返回</button>
     <h2 id="arc-form-title-label">添加归档</h2>
   </div>
 
@@ -1797,7 +1820,7 @@ button {
 <!-- ── View: Archive Detail ──────────────────────────────────────────── -->
 <div id="view-archives-detail" class="page">
   <div class="detail-back">
-    <button class="btn-ghost" id="btn-back-from-arc-detail">← 返回列表</button>
+    <button class="btn-ghost" id="btn-back-from-arc-detail">返回列表</button>
   </div>
   <div class="detail-header">
     <div class="detail-title" id="arc-detail-title"></div>
@@ -1805,6 +1828,7 @@ button {
   </div>
   <div class="detail-actions" style="display:flex;gap:8px;margin-bottom:16px;">
     <button class="btn-ghost" id="btn-pin-archive">📌 置顶</button>
+    <button class="btn-ghost" id="btn-dl-archive">下载 .md</button>
     <button class="btn-primary" id="btn-edit-archive">编辑</button>
     <button class="btn-danger" id="btn-delete-archive">删除</button>
   </div>
@@ -1884,7 +1908,7 @@ button {
 <!-- ── View: Project Note Form ─────────────────────────────────────────── -->
 <div id="view-project-form" class="page">
   <div class="form-header">
-    <button class="btn-ghost" id="btn-back-to-proj-list">← 返回</button>
+    <button class="btn-ghost" id="btn-back-to-proj-list">返回</button>
     <h2 id="proj-form-title-label">添加笔记</h2>
   </div>
   <div class="form-row">
@@ -1953,7 +1977,7 @@ button {
 <!-- ── View: Project Note Detail ───────────────────────────────────────── -->
 <div id="view-project-detail" class="page">
   <div class="detail-back">
-    <button class="btn-ghost" id="btn-back-from-proj-detail">← 返回列表</button>
+    <button class="btn-ghost" id="btn-back-from-proj-detail">返回列表</button>
   </div>
   <div class="detail-header">
     <div class="detail-title" id="proj-detail-title"></div>
@@ -1961,6 +1985,7 @@ button {
   </div>
   <div class="detail-actions" style="display:flex;gap:8px;margin-bottom:16px;">
     <button class="btn-ghost" id="btn-pin-proj-note">📌 置顶</button>
+    <button class="btn-ghost" id="btn-dl-proj-note">下载 .md</button>
     <button class="btn-primary" id="btn-edit-proj-note">编辑</button>
     <button class="btn-danger" id="btn-delete-proj-note">删除</button>
   </div>
@@ -2343,9 +2368,11 @@ function ensureNoteVditor() {
       mode: 'wysiwyg',
       theme: _dk ? 'dark' : 'classic',
       height: 'auto',
-      minHeight: 200,
+      minHeight: 500,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      undoDelay: 100,
+      toolbarConfig: { pin: true },
       toolbar: [
         "emoji","headings","bold","italic","strike","link","|",
         "list","ordered-list","check","outdent","indent","|",
@@ -2401,9 +2428,11 @@ function ensureOpVditor() {
       mode: 'wysiwyg',
       theme: _dk2 ? 'dark' : 'classic',
       height: 'auto',
-      minHeight: 200,
+      minHeight: 500,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      undoDelay: 100,
+      toolbarConfig: { pin: true },
       toolbar: [
         "emoji","headings","bold","italic","strike","link","|",
         "list","ordered-list","check","outdent","indent","|",
@@ -2466,9 +2495,11 @@ function ensureArcDescVditor() {
       mode: 'wysiwyg',
       theme: _dk3 ? 'dark' : 'classic',
       height: 'auto',
-      minHeight: 150,
+      minHeight: 350,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      undoDelay: 100,
+      toolbarConfig: { pin: true },
       toolbar: [
         "emoji","headings","bold","italic","strike","link","|",
         "list","ordered-list","check","outdent","indent","|",
@@ -5781,9 +5812,11 @@ function ensureProjVditor() {
       mode: 'wysiwyg',
       theme: _dk4 ? 'dark' : 'classic',
       height: 'auto',
-      minHeight: 200,
+      minHeight: 500,
       cdn: '/vendor/vditor',
       cache: { enable: false },
+      undoDelay: 100,
+      toolbarConfig: { pin: true },
       toolbar: [
         "emoji","headings","bold","italic","strike","link","|",
         "list","ordered-list","check","outdent","indent","|",
@@ -6084,6 +6117,47 @@ async function projUploadImageAndInsert(file) {
   }
 }
 
+/* ── Download as Markdown ─────────────────────────────────────────────── */
+function downloadMarkdown(filename, content) {
+  const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (filename || 'untitled').replace(/[\/\\:*?"<>|]/g, '_') + '.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function downloadDetail(type) {
+  let url, titleField;
+  if (type === 'note') {
+    if (!viewingNoteId) return;
+    url = '/api/notes/' + viewingNoteId;
+  } else if (type === 'opinion') {
+    if (!viewingOpinionId) return;
+    url = '/api/opinions/' + viewingOpinionId;
+  } else if (type === 'archive') {
+    if (!viewingArchiveId) return;
+    url = '/api/archives/' + viewingArchiveId;
+  } else if (type === 'project-note') {
+    if (!currentProjectId || !viewingProjNoteId) return;
+    url = '/api/projects/' + currentProjectId + '/notes/' + viewingProjNoteId;
+  }
+  try {
+    const res = await apiFetch(url);
+    if (!res.ok) return;
+    const d = await res.json();
+    const title = d.title || '无标题';
+    const body = d.content || d.content_description || '';
+    let md = '# ' + title + '\n\n';
+    if (d.topic) md += '> 主题: ' + d.topic + '\n\n';
+    if (d.type) md += '> 类型: ' + d.type + '\n\n';
+    if (d.tags && d.tags.length) md += '> 标签: ' + d.tags.join(', ') + '\n\n';
+    if (d.author) md += '> 作者: ' + d.author + '\n\n';
+    md += body;
+    downloadMarkdown(title, md);
+  } catch (e) {}
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    Event Listeners
    ════════════════════════════════════════════════════════════════════════ */
@@ -6097,6 +6171,7 @@ $('btn-add-note').addEventListener('click', openCreateForm);
 $('btn-back-to-list').addEventListener('click', () => showView('list'));
 $('btn-back-from-detail').addEventListener('click', () => showView('list'));
 
+$('btn-dl-note').addEventListener('click', () => downloadDetail('note'));
 $('btn-pin-note').addEventListener('click', async () => {
   if (!viewingNoteId) return;
   const res = await apiFetch('/api/notes/' + viewingNoteId + '/toggle-pinned', { method: 'POST' });
@@ -6223,6 +6298,7 @@ $('op-verify-priority-stars').addEventListener('click', (e) => {
 $('btn-save-opinion').addEventListener('click', () => saveOpinion({ navigateAfterSave: false }));
 $('btn-save-opinion-open').addEventListener('click', () => saveOpinion({ navigateAfterSave: true }));
 
+$('btn-dl-opinion').addEventListener('click', () => downloadDetail('opinion'));
 $('btn-pin-opinion').addEventListener('click', async () => {
   if (!viewingOpinionId) return;
   const res = await apiFetch('/api/opinions/' + viewingOpinionId + '/toggle-pinned', { method: 'POST' });
@@ -6319,6 +6395,7 @@ $('btn-back-from-arc-detail').addEventListener('click', () => { loadArchives(); 
 $('btn-save-archive').addEventListener('click', () => saveArchive({ navigateAfterSave: false }));
 $('btn-save-archive-open').addEventListener('click', () => saveArchive({ navigateAfterSave: true }));
 
+$('btn-dl-archive').addEventListener('click', () => downloadDetail('archive'));
 $('btn-pin-archive').addEventListener('click', async () => {
   if (!viewingArchiveId) return;
   const res = await apiFetch('/api/archives/' + viewingArchiveId + '/toggle-pinned', { method: 'POST' });
@@ -6526,6 +6603,7 @@ $('btn-back-from-proj-detail').addEventListener('click', () => { loadProjectNote
 $('btn-save-proj-note').addEventListener('click', () => saveProjNote({ navigateAfterSave: false }));
 $('btn-save-proj-note-and-open').addEventListener('click', () => saveProjNote({ navigateAfterSave: true }));
 
+$('btn-dl-proj-note').addEventListener('click', () => downloadDetail('project-note'));
 $('btn-pin-proj-note').addEventListener('click', async () => {
   if (!viewingProjNoteId || !currentProjectId) return;
   const res = await apiFetch('/api/projects/' + currentProjectId + '/notes/' + viewingProjNoteId + '/toggle-pinned', { method: 'POST' });
@@ -6652,6 +6730,19 @@ $('btn-add-proj-question').addEventListener('click', () => {
       loadProjQuestions(viewingProjNoteId);
     },
   });
+});
+
+/* ── CMD+S / Ctrl+S Save Shortcut ──────────────────────────────────── */
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+    e.preventDefault();
+    switch (currentView) {
+      case 'form': saveNote({ navigateAfterSave: false }); break;
+      case 'opinions-form': saveOpinion({ navigateAfterSave: false }); break;
+      case 'archives-form': saveArchive({ navigateAfterSave: false }); break;
+      case 'project-form': saveProjNote({ navigateAfterSave: false }); break;
+    }
+  }
 });
 
 /* ════════════════════════════════════════════════════════════════════════
