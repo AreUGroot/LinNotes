@@ -1311,10 +1311,13 @@ button {
   margin-top: 0.5em;
 }
 
-/* ── Vditor toolbar sticky below fixed nav ───────────────────────────── */
+/* ── Vditor toolbar sticky below fixed nav ────────────────────────────── */
 .vditor-shell .vditor-toolbar--pin {
   top: var(--nav-h) !important;
   z-index: 2;
+}
+#view-project-form .vditor-shell .vditor-toolbar--pin {
+  top: calc(var(--nav-h) + 44px) !important;
 }
 
 /* ── Vditor outline sticky ───────────────────────────────────────────── */
@@ -6730,6 +6733,48 @@ $('btn-add-proj-question').addEventListener('click', () => {
     },
   });
 });
+
+/* ── Vditor Toolbar Pin via JS scroll ─────────────────────────────── */
+(function() {
+  const navH = () => parseInt(getComputedStyle(document.documentElement).getPropertyValue('--nav-h')) || 44;
+  document.addEventListener('scroll', () => {
+    document.querySelectorAll('.vditor-shell.active .vditor-toolbar').forEach(tb => {
+      const vd = tb.closest('.vditor');
+      if (!vd) return;
+      const top = navH();
+      const rect = vd.getBoundingClientRect();
+      const tbH = tb.offsetHeight;
+      // Should fix: editor top has scrolled above nav, and editor bottom still has room
+      if (rect.top < top && rect.bottom > top + tbH + 20) {
+        if (!tb.classList.contains('vditor-toolbar--fixed')) {
+          tb.classList.add('vditor-toolbar--fixed');
+          tb.style.top = top + 'px';
+          tb.style.left = rect.left + 'px';
+          tb.style.width = rect.width + 'px';
+          // Insert spacer so content doesn't jump
+          let spacer = vd.querySelector('.vditor-toolbar-spacer');
+          if (!spacer) {
+            spacer = document.createElement('div');
+            spacer.className = 'vditor-toolbar-spacer';
+            spacer.style.height = tbH + 'px';
+            tb.after(spacer);
+          }
+        } else {
+          // Update width/left on resize
+          tb.style.left = rect.left + 'px';
+          tb.style.width = rect.width + 'px';
+        }
+      } else if (tb.classList.contains('vditor-toolbar--fixed')) {
+        tb.classList.remove('vditor-toolbar--fixed');
+        tb.style.top = '';
+        tb.style.left = '';
+        tb.style.width = '';
+        const spacer = vd.querySelector('.vditor-toolbar-spacer');
+        if (spacer) spacer.remove();
+      }
+    });
+  }, { passive: true });
+})();
 
 /* ── CMD+S / Ctrl+S Save Shortcut ──────────────────────────────────── */
 document.addEventListener('keydown', (e) => {
