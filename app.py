@@ -393,6 +393,10 @@ def _init_db():
         'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)',
         ('Qingli', '888888', ROLE_USER)
     )
+    db.execute(
+        'INSERT OR IGNORE INTO users (username, password, role) VALUES (?, ?, ?)',
+        ('William', '888888', ROLE_USER)
+    )
 
     # Test accounts
     for uname, pwd in [('TestUser1', '123456'), ('TestUser2', '123456'), ('TestUser3', '123456')]:
@@ -407,7 +411,7 @@ def _init_db():
             'INSERT OR IGNORE INTO user_permissions (username, section) VALUES (?, ?)',
             ('Lin', section)
         )
-    for uname in ('Qingli', 'TestUser1', 'TestUser2', 'TestUser3'):
+    for uname in ('Qingli', 'William', 'TestUser1', 'TestUser2', 'TestUser3'):
         for section in ('opinions', 'archives', 'projects'):
             db.execute(
                 'INSERT OR IGNORE INTO user_permissions (username, section) VALUES (?, ?)',
