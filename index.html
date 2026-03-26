@@ -1238,7 +1238,7 @@ button {
 /* ── Opinions Detail View ─────────────────────────────────────────────── */
 #view-opinions-detail {
   padding: calc(var(--nav-h) + 28px) 24px 28px;
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -1366,7 +1366,7 @@ button {
 }
 #view-archives-detail {
   padding: calc(var(--nav-h) + 28px) 24px 28px;
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -1514,7 +1514,7 @@ button {
 }
 #view-project-detail {
   padding: calc(var(--nav-h) + 44px + 28px) 24px 28px;
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -1906,7 +1906,13 @@ button {
     <button class="btn-primary" id="btn-edit-opinion">编辑</button>
     <button class="btn-danger" id="btn-delete-opinion">删除</button>
   </div>
-  <div class="detail-body render-box" id="op-detail-body"></div>
+  <div class="detail-content-wrapper">
+    <div class="detail-body render-box" id="op-detail-body"></div>
+    <aside class="detail-outline" id="op-detail-outline">
+      <div class="outline-header">目录</div>
+      <nav class="outline-tree" id="op-outline-tree"></nav>
+    </aside>
+  </div>
 
   <!-- Rating Section -->
   <div class="rating-section" id="op-rating-section">
@@ -2058,7 +2064,13 @@ button {
 
   <div style="margin-bottom:16px;">
     <div class="section-label">内容描述</div>
-    <div class="detail-body render-box" id="arc-detail-desc"></div>
+    <div class="detail-content-wrapper">
+      <div class="detail-body render-box" id="arc-detail-desc"></div>
+      <aside class="detail-outline" id="arc-detail-outline">
+        <div class="outline-header">目录</div>
+        <nav class="outline-tree" id="arc-outline-tree"></nav>
+      </aside>
+    </div>
   </div>
 
   <div id="arc-detail-docs-section" style="margin-bottom:16px;display:none;">
@@ -2211,7 +2223,13 @@ button {
     <button class="btn-primary" id="btn-edit-proj-note">编辑</button>
     <button class="btn-danger" id="btn-delete-proj-note">删除</button>
   </div>
-  <div class="detail-body render-box" id="proj-detail-body"></div>
+  <div class="detail-content-wrapper">
+    <div class="detail-body render-box" id="proj-detail-body"></div>
+    <aside class="detail-outline" id="proj-detail-outline">
+      <div class="outline-header">目录</div>
+      <nav class="outline-tree" id="proj-outline-tree"></nav>
+    </aside>
+  </div>
   <div class="cq-section">
     <div class="cq-section-header">
       <h3>评论</h3>
@@ -3927,9 +3945,9 @@ async function saveNote(options = {}) {
 /* ════════════════════════════════════════════════════════════════════════
    Outline / TOC
    ════════════════════════════════════════════════════════════════════════ */
-function buildOutline(container, bodyEl) {
-  const treeEl = $('outline-tree');
-  const outlineEl = $('detail-outline');
+function buildOutline(treeId, outlineId, bodyEl) {
+  const treeEl = $(treeId);
+  const outlineEl = $(outlineId);
   treeEl.innerHTML = '';
 
   const headings = bodyEl.querySelectorAll('h1, h2, h3, h4, h5, h6');
@@ -4102,7 +4120,7 @@ async function openNoteDetail(noteId) {
     renderMarkdownKatex(note.content || '', $('detail-body'));
 
     // Build outline / TOC
-    buildOutline($('outline-tree'), $('detail-body'));
+    buildOutline('outline-tree', 'detail-outline', $('detail-body'));
 
     // Clear input areas
     $('comment-input-area').innerHTML = '';
@@ -4937,6 +4955,9 @@ async function openOpinionDetail(oid) {
     renderMarkdownKatex(op.content || '', contentDiv);
     bodyEl.appendChild(contentDiv);
 
+    // Build outline / TOC
+    buildOutline('op-outline-tree', 'op-detail-outline', bodyEl);
+
     // Rating section
     const ratingLabels = { '预测': '预测准确性', '观点': '观点质量', '事实': '事实可信度', '计划': '计划完成度', '反驳': '评分' };
     $('op-rating-label').textContent = ratingLabels[op.type] || '评分';
@@ -5660,6 +5681,9 @@ async function openArchiveDetail(aid) {
 
   // Content Description
   renderMarkdownKatex(a.content_description || '', $('arc-detail-desc'));
+
+  // Build outline / TOC
+  buildOutline('arc-outline-tree', 'arc-detail-outline', $('arc-detail-desc'));
 
   // Documents
   const docs = a.documents || [];
@@ -6522,6 +6546,10 @@ async function openProjectNoteDetail(noteId) {
   pinBtn.textContent = note.pinned ? '📌 取消置顶' : '📌 置顶';
 
   renderMarkdownKatex(note.content || '', $('proj-detail-body'));
+
+  // Build outline / TOC
+  buildOutline('proj-outline-tree', 'proj-detail-outline', $('proj-detail-body'));
+
   loadProjComments(noteId);
   loadProjQuestions(noteId);
   showView('project-detail');
