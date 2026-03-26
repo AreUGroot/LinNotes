@@ -78,6 +78,16 @@
   background: #3b4460;
   color: #c4b5fd;
 }
+[data-theme="dark"] .outline-tree .outline-item:hover {
+  background: #3b4460;
+}
+[data-theme="dark"] .cq-item-actions .btn-edit-cq {
+  color: #a5b4fc;
+  border-color: #4a5568;
+}
+[data-theme="dark"] .cq-item-actions .btn-edit-cq:hover {
+  background: #3b4460;
+}
 [data-theme="dark"] .tag-option:hover {
   background: #3b4460;
 }
@@ -809,7 +819,7 @@ button {
 /* ── Note Detail View ──────────────────────────────────────────────────── */
 #view-detail {
   padding: calc(var(--nav-h) + 28px) 24px 28px;
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -839,8 +849,100 @@ button {
   gap: 8px;
   margin-bottom: 20px;
 }
+.detail-content-wrapper {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+}
 .detail-body {
   min-height: 200px;
+  flex: 1;
+  min-width: 0;
+}
+.detail-outline {
+  width: 220px;
+  flex-shrink: 0;
+  position: sticky;
+  top: calc(var(--nav-h) + 28px);
+  max-height: calc(100vh - var(--nav-h) - 60px);
+  overflow-y: auto;
+  border: 1px solid var(--bdr);
+  border-radius: 10px;
+  background: var(--card);
+  padding: 12px;
+  font-size: 0.82rem;
+}
+.detail-outline:empty,
+.detail-outline.hidden {
+  display: none;
+}
+.outline-header {
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  color: var(--text);
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--bdr);
+}
+.outline-tree ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.outline-tree li {
+  margin: 0;
+}
+.outline-tree .outline-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--sub);
+  line-height: 1.5;
+  word-break: break-word;
+}
+.outline-tree .outline-item:hover {
+  background: #eef0fd;
+  color: var(--text);
+}
+.outline-tree .outline-item.active {
+  color: var(--pri);
+  font-weight: 600;
+}
+.outline-tree .outline-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: var(--sub);
+  transition: transform 0.15s;
+  user-select: none;
+}
+.outline-tree .outline-toggle.collapsed {
+  transform: rotate(-90deg);
+}
+.outline-tree .outline-toggle.leaf {
+  visibility: hidden;
+}
+.outline-tree .outline-children {
+  padding-left: 12px;
+}
+.outline-tree .outline-children.collapsed {
+  display: none;
+}
+.outline-tree .outline-level-1 { font-weight: 600; }
+.outline-tree .outline-level-2 { padding-left: 4px; }
+.outline-tree .outline-level-3 { padding-left: 8px; font-size: 0.78rem; }
+.outline-tree .outline-level-4 { padding-left: 12px; font-size: 0.78rem; }
+@media (max-width: 860px) {
+  .detail-content-wrapper { flex-direction: column; }
+  .detail-outline { width: 100%; position: static; max-height: none; }
 }
 .render-box a {
   color: var(--pri);
@@ -1011,6 +1113,13 @@ button {
 .cq-item-actions .btn-delete-cq:hover {
   background: #fff5f5;
   color: #c53030;
+}
+.cq-item-actions .btn-edit-cq {
+  color: var(--pri);
+  border-color: #c3cbf7;
+}
+.cq-item-actions .btn-edit-cq:hover {
+  background: #eef0fd;
 }
 
 /* ── Inline KaTeX input box (for comment/question) ─────────────────────── */
@@ -1612,7 +1721,13 @@ button {
     <button class="btn-primary" id="btn-edit-note">编辑</button>
     <button class="btn-danger" id="btn-delete-note">删除</button>
   </div>
-  <div class="detail-body render-box" id="detail-body"></div>
+  <div class="detail-content-wrapper">
+    <div class="detail-body render-box" id="detail-body"></div>
+    <aside class="detail-outline" id="detail-outline">
+      <div class="outline-header">目录</div>
+      <nav class="outline-tree" id="outline-tree"></nav>
+    </aside>
+  </div>
 
   <!-- Comments Section -->
   <div class="cq-section">
@@ -3810,6 +3925,151 @@ async function saveNote(options = {}) {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   Outline / TOC
+   ════════════════════════════════════════════════════════════════════════ */
+function buildOutline(container, bodyEl) {
+  const treeEl = $('outline-tree');
+  const outlineEl = $('detail-outline');
+  treeEl.innerHTML = '';
+
+  const headings = bodyEl.querySelectorAll('h1, h2, h3, h4, h5, h6');
+  if (headings.length === 0) {
+    outlineEl.classList.add('hidden');
+    return;
+  }
+  outlineEl.classList.remove('hidden');
+
+  // Assign IDs to headings for scroll-to
+  headings.forEach((h, i) => {
+    if (!h.id) h.id = 'outline-heading-' + i;
+  });
+
+  // Build tree structure
+  const items = Array.from(headings).map(h => ({
+    level: parseInt(h.tagName[1]),
+    text: h.textContent.trim(),
+    id: h.id,
+    children: [],
+  }));
+
+  // Normalize: find min level
+  const minLevel = Math.min(...items.map(it => it.level));
+  items.forEach(it => it.level = it.level - minLevel + 1);
+
+  function buildTree(flat) {
+    const root = { children: [], level: 0 };
+    const stack = [root];
+    for (const item of flat) {
+      while (stack.length > 1 && stack[stack.length - 1].level >= item.level) {
+        stack.pop();
+      }
+      stack[stack.length - 1].children.push(item);
+      stack.push(item);
+    }
+    return root.children;
+  }
+
+  const tree = buildTree(items);
+
+  function renderNode(node) {
+    const li = document.createElement('li');
+    const hasChildren = node.children && node.children.length > 0;
+
+    const itemDiv = document.createElement('div');
+    itemDiv.className = 'outline-item outline-level-' + node.level;
+
+    const toggle = document.createElement('span');
+    toggle.className = 'outline-toggle' + (hasChildren ? '' : ' leaf');
+    toggle.textContent = '\u25BC';
+    itemDiv.appendChild(toggle);
+
+    const label = document.createElement('span');
+    label.textContent = node.text;
+    label.style.flex = '1';
+    itemDiv.appendChild(label);
+
+    li.appendChild(itemDiv);
+
+    // Click to scroll
+    label.addEventListener('click', () => {
+      const target = document.getElementById(node.id);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Highlight active
+        treeEl.querySelectorAll('.outline-item.active').forEach(el => el.classList.remove('active'));
+        itemDiv.classList.add('active');
+      }
+    });
+
+    if (hasChildren) {
+      const childUl = document.createElement('ul');
+      childUl.className = 'outline-children';
+      node.children.forEach(child => childUl.appendChild(renderNode(child)));
+      li.appendChild(childUl);
+
+      // Toggle collapse
+      toggle.addEventListener('click', (e) => {
+        e.stopPropagation();
+        toggle.classList.toggle('collapsed');
+        childUl.classList.toggle('collapsed');
+      });
+    }
+
+    return li;
+  }
+
+  const ul = document.createElement('ul');
+  tree.forEach(node => ul.appendChild(renderNode(node)));
+  treeEl.appendChild(ul);
+
+  // Scroll spy: highlight current heading
+  let ticking = false;
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      ticking = false;
+      let current = null;
+      for (const h of headings) {
+        const rect = h.getBoundingClientRect();
+        if (rect.top <= 120) current = h;
+      }
+      treeEl.querySelectorAll('.outline-item.active').forEach(el => el.classList.remove('active'));
+      if (current) {
+        const id = current.id;
+        treeEl.querySelectorAll('.outline-item').forEach(el => {
+          const label = el.querySelector('span:nth-child(2)');
+          if (label && el.closest('li')) {
+            // Match by checking if clicking this item scrolls to the same heading
+            const itemLi = el.closest('li');
+            // Find if this item corresponds to the current heading
+          }
+        });
+        // Simpler approach: find by text match or iterate items
+        const allItems = treeEl.querySelectorAll('.outline-item');
+        for (const item of allItems) {
+          const lbl = item.querySelector('span:nth-child(2)');
+          if (lbl && lbl._outlineId === id) {
+            item.classList.add('active');
+            break;
+          }
+        }
+      }
+    });
+  };
+
+  // Tag labels with heading IDs for scroll spy
+  treeEl.querySelectorAll('.outline-item').forEach((item, idx) => {
+    const lbl = item.querySelector('span:nth-child(2)');
+    if (lbl && items[idx]) lbl._outlineId = items[idx].id;
+  });
+
+  window.removeEventListener('scroll', window._outlineScrollSpy);
+  window._outlineScrollSpy = onScroll;
+  window.addEventListener('scroll', onScroll, { passive: true });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    Note Detail
    ════════════════════════════════════════════════════════════════════════ */
 async function openNoteDetail(noteId) {
@@ -3840,6 +4100,9 @@ async function openNoteDetail(noteId) {
 
     // Body
     renderMarkdownKatex(note.content || '', $('detail-body'));
+
+    // Build outline / TOC
+    buildOutline($('outline-tree'), $('detail-body'));
 
     // Clear input areas
     $('comment-input-area').innerHTML = '';
@@ -3989,17 +4252,22 @@ titleInput.addEventListener('blur', hideFP);
 
 // --- Shared: create an input box with live KaTeX preview ---
 function createCQInputBox(opts) {
-  // opts: { container, placeholder, submitLabel, onSubmit, onCancel, isReply }
+  // opts: { container, placeholder, submitLabel, onSubmit, onCancel, isReply, initialContent }
   const box = document.createElement('div');
   box.className = 'cq-input-box' + (opts.isReply ? ' is-reply' : '');
 
   const ta = document.createElement('textarea');
   ta.placeholder = opts.placeholder || '输入内容，支持 $LaTeX$ 公式...';
+  if (opts.initialContent) ta.value = opts.initialContent;
   box.appendChild(ta);
 
   const preview = document.createElement('div');
   preview.className = 'cq-input-preview';
-  preview.innerHTML = '<span class="empty-hint">实时预览</span>';
+  if (opts.initialContent) {
+    renderMarkdownKatex(opts.initialContent, preview);
+  } else {
+    preview.innerHTML = '<span class="empty-hint">实时预览</span>';
+  }
   box.appendChild(preview);
 
   const actions = document.createElement('div');
@@ -4111,6 +4379,33 @@ function renderComments(comments, noteId) {
     });
   });
 
+  container.querySelectorAll('.btn-edit-comment').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cid = btn.dataset.id;
+      const content = btn.dataset.content;
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '编辑评论...',
+        submitLabel: '保存',
+        initialContent: content,
+        onSubmit: async (text) => {
+          await apiFetch('/api/comments/' + cid, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text }),
+          });
+          wrapper.remove();
+          loadComments(noteId);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
   container.querySelectorAll('.btn-delete-comment').forEach(btn => {
     btn.addEventListener('click', async () => {
       const isReply = btn.dataset.reply === '1';
@@ -4138,14 +4433,18 @@ function renderComments(comments, noteId) {
 }
 
 function renderCommentItem(c, isReply) {
+  const author = c.created_by ? escapeHtml(c.created_by) : '';
+  const canEdit = c.created_by && c.created_by === authState.username;
   return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
     '<div class="cq-item-header">' +
       '<span class="cq-icon">💬</span>' +
+      (author ? '<span><strong>' + author + '</strong></span>' : '') +
       '<span>' + formatTime(c.created_at) + '</span>' +
     '</div>' +
     '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(c.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : '<button class="btn-reply-comment" data-id="' + c.id + '">回复</button>') +
+      (canEdit ? '<button class="btn-edit-comment btn-edit-cq" data-id="' + c.id + '" data-content="' + escapeHtml(c.content).replace(/"/g, '&quot;') + '">编辑</button>' : '') +
       '<button class="btn-delete-comment btn-delete-cq" data-id="' + c.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
     '</div>' +
   '</div>';
@@ -4217,6 +4516,33 @@ function renderQuestions(questions, noteId) {
     });
   });
 
+  container.querySelectorAll('.btn-edit-question').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qid = btn.dataset.id;
+      const content = btn.dataset.content;
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '编辑问题...',
+        submitLabel: '保存',
+        initialContent: content,
+        onSubmit: async (text) => {
+          await apiFetch('/api/questions/' + qid, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text }),
+          });
+          wrapper.remove();
+          loadQuestions(noteId);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
   container.querySelectorAll('.btn-delete-question').forEach(btn => {
     btn.addEventListener('click', async () => {
       const isReply = btn.dataset.reply === '1';
@@ -4246,6 +4572,8 @@ function renderQuestions(questions, noteId) {
 function renderQuestionItem(q, isReply) {
   const iconClass = q.resolved ? 'resolved' : 'question';
   const icon = q.resolved ? '✅' : '❓';
+  const author = q.created_by ? escapeHtml(q.created_by) : '';
+  const canEdit = q.created_by && q.created_by === authState.username;
   const resolveBtn = (!isReply && !q.resolved)
     ? '<button class="btn-toggle-resolved btn-resolve" data-id="' + q.id + '">已解决</button>'
     : (!isReply && q.resolved)
@@ -4255,12 +4583,14 @@ function renderQuestionItem(q, isReply) {
   return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
     '<div class="cq-item-header">' +
       '<span class="cq-icon ' + iconClass + '">' + icon + '</span>' +
+      (author ? '<span><strong>' + author + '</strong></span>' : '') +
       '<span>' + formatTime(q.created_at) + '</span>' +
       (q.resolved && !isReply ? '<span style="color:#38a169;font-weight:600;">已解决</span>' : '') +
     '</div>' +
     '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(q.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : resolveBtn + '<button class="btn-reply-question" data-id="' + q.id + '">回复</button>') +
+      (canEdit ? '<button class="btn-edit-question btn-edit-cq" data-id="' + q.id + '" data-content="' + escapeHtml(q.content).replace(/"/g, '&quot;') + '">编辑</button>' : '') +
       '<button class="btn-delete-question btn-delete-cq" data-id="' + q.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
     '</div>' +
   '</div>';
@@ -4759,6 +5089,33 @@ function renderOpinionComments(comments, oid) {
     });
   });
 
+  container.querySelectorAll('.btn-edit-op-comment').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const cid = btn.dataset.id;
+      const content = btn.dataset.content;
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '编辑评论...',
+        submitLabel: '保存',
+        initialContent: content,
+        onSubmit: async (text) => {
+          await apiFetch('/api/opinion-comments/' + cid, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text }),
+          });
+          wrapper.remove();
+          loadOpinionComments(oid);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
   container.querySelectorAll('.btn-delete-op-comment').forEach(btn => {
     btn.addEventListener('click', async () => {
       const isReply = btn.dataset.reply === '1';
@@ -4774,6 +5131,7 @@ function renderOpinionComments(comments, oid) {
 
 function renderOpCommentItem(c, isReply) {
   const author = c.created_by ? escapeHtml(c.created_by) : '未知用户';
+  const canEdit = c.created_by && c.created_by === authState.username;
   return '<div class="cq-item' + (isReply ? ' is-reply' : '') + '">' +
     '<div class="cq-item-header">' +
       '<span class="cq-icon">💬</span>' +
@@ -4783,6 +5141,7 @@ function renderOpCommentItem(c, isReply) {
     '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(c.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : '<button class="btn-reply-op-comment" data-id="' + c.id + '">回复</button>') +
+      (canEdit ? '<button class="btn-edit-op-comment btn-edit-cq" data-id="' + c.id + '" data-content="' + escapeHtml(c.content).replace(/"/g, '&quot;') + '">编辑</button>' : '') +
       '<button class="btn-delete-op-comment btn-delete-cq" data-id="' + c.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
     '</div>' +
   '</div>';
@@ -4852,6 +5211,33 @@ function renderOpinionQuestions(questions, oid) {
     });
   });
 
+  container.querySelectorAll('.btn-edit-op-question').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const qid = btn.dataset.id;
+      const content = btn.dataset.content;
+      container.querySelectorAll('.cq-input-box').forEach(b => b.remove());
+      const item = btn.closest('.cq-item');
+      const wrapper = document.createElement('div');
+      item.after(wrapper);
+      createCQInputBox({
+        container: wrapper,
+        placeholder: '编辑问题...',
+        submitLabel: '保存',
+        initialContent: content,
+        onSubmit: async (text) => {
+          await apiFetch('/api/opinion-questions/' + qid, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text }),
+          });
+          wrapper.remove();
+          loadOpinionQuestions(oid);
+        },
+        onCancel: () => wrapper.remove(),
+      });
+    });
+  });
+
   container.querySelectorAll('.btn-delete-op-question').forEach(btn => {
     btn.addEventListener('click', async () => {
       const isReply = btn.dataset.reply === '1';
@@ -4869,6 +5255,7 @@ function renderOpQuestionItem(q, isReply) {
   const iconClass = q.resolved ? 'resolved' : 'question';
   const icon = q.resolved ? '✅' : '❓';
   const author = q.created_by ? escapeHtml(q.created_by) : '未知用户';
+  const canEdit = q.created_by && q.created_by === authState.username;
   const resolveBtn = (!isReply && !q.resolved)
     ? '<button class="btn-toggle-op-resolved btn-resolve" data-id="' + q.id + '">已解决</button>'
     : (!isReply && q.resolved)
@@ -4885,6 +5272,7 @@ function renderOpQuestionItem(q, isReply) {
     '<div class="cq-item-body" data-cq-markdown>' + escapeHtml(q.content) + '</div>' +
     '<div class="cq-item-actions">' +
       (isReply ? '' : resolveBtn + '<button class="btn-reply-op-question" data-id="' + q.id + '">回复</button>') +
+      (canEdit ? '<button class="btn-edit-op-question btn-edit-cq" data-id="' + q.id + '" data-content="' + escapeHtml(q.content).replace(/"/g, '&quot;') + '">编辑</button>' : '') +
       '<button class="btn-delete-op-question btn-delete-cq" data-id="' + q.id + '" data-reply="' + (isReply ? '1' : '0') + '">删除</button>' +
     '</div>' +
   '</div>';
@@ -4956,13 +5344,22 @@ function renderArcTopicFormSelector() {
   for (let depth = 0; depth <= segments.length; depth++) {
     const prefix = segments.slice(0, depth);
     const children = getTopicChildren(index, prefix);
-    if (children.length === 0 && depth > 0) break;
+
+    // Skip next-level dropdown if pendingNewDepth is at this depth (input shown instead)
+    if (depth === segments.length && arcTopicFormState.pendingNewDepth === depth) break;
+
+    // Ensure current segment is in the options (may be a newly created topic)
+    const current = segments[depth] || '';
+    if (current && !children.includes(current)) {
+      children.push(current);
+      children.sort((a, b) => a.localeCompare(b, 'zh-CN'));
+    }
 
     const sel = document.createElement('select');
     sel.dataset.topicDepth = depth;
     sel.dataset.mode = 'arc';
-    const current = segments[depth] || '';
-    sel.innerHTML = `<option value="">-- ${depth === 0 ? '选择主题' : '选择子级'} --</option>`;
+    const label = depth === 0 ? '选择主题' : (depth < segments.length ? '选择子级' : '停在当前级 / 继续');
+    sel.innerHTML = `<option value="">-- ${label} --</option>`;
     children.forEach(c => {
       sel.innerHTML += `<option value="${escapeHtml(c)}" ${c === current ? 'selected' : ''}>${escapeHtml(c)}</option>`;
     });
@@ -5367,7 +5764,9 @@ function renderArcComments(comments, aid) {
 }
 
 function renderArcCommentItem(c, isReply) {
-  return `<div class="cq-item ${isReply ? 'is-reply' : ''}">
+  const canEdit = c.created_by && c.created_by === authState.username;
+  const safeContent = escapeHtml(c.content).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return `<div class="cq-item ${isReply ? 'is-reply' : ''}" data-raw-content="${safeContent}">
     <div class="cq-item-header">
       <span class="cq-icon">💬</span>
       ${c.created_by ? '<strong>' + escapeHtml(c.created_by) + '</strong>' : ''}
@@ -5376,6 +5775,7 @@ function renderArcCommentItem(c, isReply) {
     <div class="cq-item-body" data-cq-markdown>${escapeHtml(c.content)}</div>
     <div class="cq-item-actions">
       <button onclick="arcCommentReply('${c.id}')">回复</button>
+      ${canEdit ? `<button class="btn-edit-cq" onclick="editArcComment('${c.id}')">编辑</button>` : ''}
       <button class="btn-delete-cq" onclick="deleteArcComment('${c.id}')">删除</button>
     </div>
   </div>`;
@@ -5399,6 +5799,33 @@ function arcCommentReply(parentId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: text, parent_id: parentId }),
+      });
+      wrapper.remove();
+      loadArcComments(viewingArchiveId);
+    },
+    onCancel: () => wrapper.remove(),
+  });
+}
+
+function editArcComment(cid) {
+  const container = $('arc-comment-list');
+  container.querySelectorAll('.cq-input-box, .arc-reply-wrapper').forEach(b => b.remove());
+  const btn = container.querySelector(`[onclick*="editArcComment('${cid}')"]`);
+  const item = btn ? btn.closest('.cq-item') : null;
+  const rawContent = item ? item.dataset.rawContent || '' : '';
+  const wrapper = document.createElement('div');
+  wrapper.className = 'arc-reply-wrapper';
+  if (item) item.after(wrapper); else container.appendChild(wrapper);
+  createCQInputBox({
+    container: wrapper,
+    placeholder: '编辑评论...',
+    submitLabel: '保存',
+    initialContent: rawContent,
+    onSubmit: async (text) => {
+      await apiFetch('/api/archive-comments/' + cid, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
       });
       wrapper.remove();
       loadArcComments(viewingArchiveId);
@@ -5443,19 +5870,23 @@ function renderArcQuestions(questions, aid) {
 function renderArcQuestionItem(q, isReply) {
   const resolved = q.resolved;
   const icon = resolved ? '<span class="cq-icon resolved">✅</span>' : '<span class="cq-icon question">❓</span>';
-  const toggleBtn = resolved
+  const toggleBtn = isReply ? '' : (resolved
     ? `<button class="btn-unresolve" onclick="toggleArcQuestionResolved('${q.id}')">标记未解决</button>`
-    : `<button class="btn-resolve" onclick="toggleArcQuestionResolved('${q.id}')">标记已解决</button>`;
-  return `<div class="cq-item ${isReply ? 'is-reply' : ''}">
+    : `<button class="btn-resolve" onclick="toggleArcQuestionResolved('${q.id}')">标记已解决</button>`);
+  const canEdit = q.created_by && q.created_by === authState.username;
+  const safeContent = escapeHtml(q.content).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return `<div class="cq-item ${isReply ? 'is-reply' : ''}" data-raw-content="${safeContent}">
     <div class="cq-item-header">
       ${icon}
       ${q.created_by ? '<strong>' + escapeHtml(q.created_by) + '</strong>' : ''}
       <span>${formatTime(q.created_at)}</span>
+      ${resolved && !isReply ? '<span style="color:#38a169;font-weight:600;">已解决</span>' : ''}
     </div>
     <div class="cq-item-body" data-cq-markdown>${escapeHtml(q.content)}</div>
     <div class="cq-item-actions">
       ${toggleBtn}
-      <button onclick="arcQuestionReply('${q.id}')">回复</button>
+      ${isReply ? '' : `<button onclick="arcQuestionReply('${q.id}')">回复</button>`}
+      ${canEdit ? `<button class="btn-edit-cq" onclick="editArcQuestion('${q.id}')">编辑</button>` : ''}
       <button class="btn-delete-cq" onclick="deleteArcQuestion('${q.id}')">删除</button>
     </div>
   </div>`;
@@ -5484,6 +5915,33 @@ function arcQuestionReply(parentId) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ content: text, parent_id: parentId }),
+      });
+      wrapper.remove();
+      loadArcQuestions(viewingArchiveId);
+    },
+    onCancel: () => wrapper.remove(),
+  });
+}
+
+function editArcQuestion(qid) {
+  const container = $('arc-question-list');
+  container.querySelectorAll('.cq-input-box, .arc-reply-wrapper').forEach(b => b.remove());
+  const btn = container.querySelector(`[onclick*="editArcQuestion('${qid}')"]`);
+  const item = btn ? btn.closest('.cq-item') : null;
+  const rawContent = item ? item.dataset.rawContent || '' : '';
+  const wrapper = document.createElement('div');
+  wrapper.className = 'arc-reply-wrapper';
+  if (item) item.after(wrapper); else container.appendChild(wrapper);
+  createCQInputBox({
+    container: wrapper,
+    placeholder: '编辑问题...',
+    submitLabel: '保存',
+    initialContent: rawContent,
+    onSubmit: async (text) => {
+      await apiFetch('/api/archive-questions/' + qid, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: text }),
       });
       wrapper.remove();
       loadArcQuestions(viewingArchiveId);
@@ -5706,28 +6164,35 @@ function renderProjTopicFormSelector() {
     const childSet = index.childrenByPrefix.get(prefix);
     const children = childSet ? Array.from(childSet).sort() : [];
     if (depth < state.segments.length) {
+      // Ensure current segment is in the options (may be a newly created topic)
+      const currentSeg = state.segments[depth];
+      if (currentSeg && !children.includes(currentSeg)) {
+        children.push(currentSeg);
+        children.sort();
+      }
       const sel = document.createElement('select');
       sel.dataset.topicDepth = depth;
       sel.dataset.mode = 'proj';
       sel.innerHTML = '<option value="">-- 选择 --</option>';
       children.forEach(c => {
-        sel.innerHTML += `<option value="${escapeHtml(c)}" ${c === state.segments[depth] ? 'selected' : ''}>${escapeHtml(c)}</option>`;
+        sel.innerHTML += `<option value="${escapeHtml(c)}" ${c === currentSeg ? 'selected' : ''}>${escapeHtml(c)}</option>`;
       });
       sel.innerHTML += `<option value="${TOPIC_NEW_MARKER}">+ 新建</option>`;
       container.appendChild(sel);
     } else {
+      // Skip if new input is shown at this depth
       if (state.pendingNewDepth === depth) break;
-      if (children.length > 0 || depth === 0) {
-        const sel = document.createElement('select');
-        sel.dataset.topicDepth = depth;
-        sel.dataset.mode = 'proj';
-        sel.innerHTML = '<option value="">-- 选择 --</option>';
-        children.forEach(c => {
-          sel.innerHTML += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
-        });
-        sel.innerHTML += `<option value="${TOPIC_NEW_MARKER}">+ 新建</option>`;
-        container.appendChild(sel);
-      }
+      // Always show next-level dropdown so user can add sublevels
+      const sel = document.createElement('select');
+      sel.dataset.topicDepth = depth;
+      sel.dataset.mode = 'proj';
+      const label = depth === 0 ? '选择' : '停在当前级 / 继续';
+      sel.innerHTML = `<option value="">-- ${label} --</option>`;
+      children.forEach(c => {
+        sel.innerHTML += `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`;
+      });
+      sel.innerHTML += `<option value="${TOPIC_NEW_MARKER}">+ 新建</option>`;
+      container.appendChild(sel);
     }
   }
 
@@ -6110,6 +6575,31 @@ function renderProjComments(comments, noteId) {
       });
     });
   });
+  container.querySelectorAll('.cq-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const content = btn.dataset.content;
+      const cqType = btn.dataset.type;
+      const area = btn.closest('.cq-item').querySelector('.cq-reply-area') || btn.closest('.cq-body');
+      if (area.querySelector('.cq-input-box')) return;
+      createCQInputBox({
+        container: area,
+        placeholder: '编辑...',
+        submitLabel: '保存',
+        initialContent: content,
+        onSubmit: async (text) => {
+          const endpoint = cqType === 'comment' ? '/api/project-comments/' : '/api/project-questions/';
+          await apiFetch(endpoint + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text }),
+          });
+          loadProjComments(noteId);
+        },
+      });
+    });
+  });
+
   container.querySelectorAll('.cq-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('删除此评论？')) return;
@@ -6122,10 +6612,15 @@ function renderProjComments(comments, noteId) {
 function renderProjCQItem(item, type, noteId, byParent) {
   const icon = type === 'comment' ? '&#128172;' : (item.resolved ? '&#9989;' : '&#10067;');
   const replies = byParent[item.id] || [];
+  const canEdit = item.created_by && item.created_by === authState.username;
+  const safeContent = escapeHtml(item.content).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   let actionsHtml = `<span class="cq-reply-btn" data-parent-id="${item.id}" style="cursor:pointer;font-size:0.8rem;color:var(--pri);">回复</span>`;
   if (type === 'question') {
     const label = item.resolved ? '改为未解决' : '已解决';
     actionsHtml += ` <span class="cq-resolve-btn" data-id="${item.id}" style="cursor:pointer;font-size:0.8rem;color:var(--pri);">${label}</span>`;
+  }
+  if (canEdit) {
+    actionsHtml += ` <span class="cq-edit-btn btn-edit-cq" data-id="${item.id}" data-type="${type}" data-content="${safeContent}" style="cursor:pointer;font-size:0.8rem;color:var(--pri);">编辑</span>`;
   }
   actionsHtml += ` <span class="cq-delete-btn" data-id="${item.id}" style="cursor:pointer;font-size:0.8rem;color:#e53e3e;">删除</span>`;
   let html = `<div class="cq-item"><div class="cq-icon">${icon}</div><div class="cq-body">`;
@@ -6134,10 +6629,17 @@ function renderProjCQItem(item, type, noteId, byParent) {
   html += `<div class="cq-actions">${actionsHtml}</div>`;
   html += `<div class="cq-reply-area"></div>`;
   for (const r of replies) {
+    const rCanEdit = r.created_by && r.created_by === authState.username;
+    const rSafeContent = escapeHtml(r.content).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    let rActions = '';
+    if (rCanEdit) {
+      rActions += `<span class="cq-edit-btn btn-edit-cq" data-id="${r.id}" data-type="${type}" data-content="${rSafeContent}" style="cursor:pointer;font-size:0.8rem;color:var(--pri);">编辑</span> `;
+    }
+    rActions += `<span class="cq-delete-btn" data-id="${r.id}" style="cursor:pointer;font-size:0.8rem;color:#e53e3e;">删除</span>`;
     html += `<div class="cq-item is-reply"><div class="cq-icon">${icon}</div><div class="cq-body">`;
     html += `<div class="cq-meta">${r.created_by ? escapeHtml(r.created_by) + ' · ' : ''}${formatTime(r.created_at)}</div>`;
     html += `<div class="cq-content" data-cq-markdown>${escapeHtml(r.content)}</div>`;
-    html += `<div class="cq-actions"><span class="cq-delete-btn" data-id="${r.id}" style="cursor:pointer;font-size:0.8rem;color:#e53e3e;">删除</span></div>`;
+    html += `<div class="cq-actions">${rActions}</div>`;
     html += `</div></div>`;
   }
   html += `</div></div>`;
@@ -6198,6 +6700,31 @@ function renderProjQuestions(questions, noteId) {
       loadProjQuestions(noteId);
     });
   });
+  container.querySelectorAll('.cq-edit-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.id;
+      const content = btn.dataset.content;
+      const cqType = btn.dataset.type;
+      const area = btn.closest('.cq-item').querySelector('.cq-reply-area') || btn.closest('.cq-body');
+      if (area.querySelector('.cq-input-box')) return;
+      createCQInputBox({
+        container: area,
+        placeholder: '编辑...',
+        submitLabel: '保存',
+        initialContent: content,
+        onSubmit: async (text) => {
+          const endpoint = cqType === 'comment' ? '/api/project-comments/' : '/api/project-questions/';
+          await apiFetch(endpoint + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ content: text }),
+          });
+          loadProjQuestions(noteId);
+        },
+      });
+    });
+  });
+
   container.querySelectorAll('.cq-delete-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       if (!confirm('删除此问题？')) return;
@@ -6363,7 +6890,11 @@ $('new-topic-input').addEventListener('keydown', (e) => {
 $('btn-topic-commit-level').addEventListener('click', () => {
   if (!commitPendingTopicToSegments()) {
     showMsg('form-msg', '请输入新主题名称', 'err');
+    return;
   }
+  // Continue to next level: reopen input for the new depth
+  topicFormState.pendingNewDepth = topicFormState.segments.length;
+  renderTopicFormSelector();
 });
 
 $('filter-topic').addEventListener('change', loadNotes);
@@ -6536,7 +7067,10 @@ $('arc-new-topic-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); commitArcPendingTopic(); }
 });
 $('btn-arc-topic-commit-level').addEventListener('click', () => {
-  if (!commitArcPendingTopic()) showMsg('arc-form-msg', '请输入新主题名称', 'err');
+  if (!commitArcPendingTopic()) { showMsg('arc-form-msg', '请输入新主题名称', 'err'); return; }
+  // Continue to next level
+  arcTopicFormState.pendingNewDepth = arcTopicFormState.segments.length;
+  renderArcTopicFormSelector();
 });
 
 // Archive tag selector
@@ -6744,7 +7278,10 @@ $('proj-new-topic-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); commitProjPendingTopic(); }
 });
 $('btn-proj-topic-commit-level').addEventListener('click', () => {
-  if (!commitProjPendingTopic()) showMsg('proj-form-msg', '请输入新主题名称', 'err');
+  if (!commitProjPendingTopic()) { showMsg('proj-form-msg', '请输入新主题名称', 'err'); return; }
+  // Continue to next level
+  projTopicFormState.pendingNewDepth = projTopicFormState.segments.length;
+  renderProjTopicFormSelector();
 });
 
 // Project tag selector

@@ -108,6 +108,7 @@ def _init_db():
             note_id TEXT NOT NULL,
             parent_id TEXT,
             content TEXT NOT NULL,
+            created_by TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
         );
@@ -118,6 +119,7 @@ def _init_db():
             parent_id TEXT,
             content TEXT NOT NULL,
             resolved INTEGER NOT NULL DEFAULT 0,
+            created_by TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             FOREIGN KEY (note_id) REFERENCES notes(id) ON DELETE CASCADE
         );
@@ -333,6 +335,16 @@ def _init_db():
         db.execute('SELECT created_by FROM opinion_questions LIMIT 1')
     except sqlite3.OperationalError:
         db.execute("ALTER TABLE opinion_questions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+
+    # Ensure created_by column exists for notes comments/questions
+    try:
+        db.execute('SELECT created_by FROM comments LIMIT 1')
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE comments ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
+    try:
+        db.execute('SELECT created_by FROM questions LIMIT 1')
+    except sqlite3.OperationalError:
+        db.execute("ALTER TABLE questions ADD COLUMN created_by TEXT NOT NULL DEFAULT ''")
 
     # Migrate: add new opinion fields for expanded types
     for col, col_type, default in [
@@ -987,6 +999,7 @@ def _comment_to_dict(row):
         'note_id': row['note_id'],
         'parent_id': row['parent_id'],
         'content': row['content'],
+        'created_by': row['created_by'] if 'created_by' in row.keys() else '',
         'created_at': row['created_at'],
     }
 
@@ -1018,8 +1031,8 @@ def create_comment(note_id):
     with _lock:
         db = _get_db()
         db.execute(
-            'INSERT INTO comments (id, note_id, parent_id, content, created_at) VALUES (?, ?, ?, ?, ?)',
-            (cid, note_id, parent_id, content, now)
+            'INSERT INTO comments (id, note_id, parent_id, content, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+            (cid, note_id, parent_id, content, g.current_user, now)
         )
         db.commit()
         row = db.execute('SELECT * FROM comments WHERE id = ?', (cid,)).fetchone()
@@ -1034,6 +1047,7 @@ def _question_to_dict(row):
         'parent_id': row['parent_id'],
         'content': row['content'],
         'resolved': bool(row['resolved']),
+        'created_by': row['created_by'] if 'created_by' in row.keys() else '',
         'created_at': row['created_at'],
     }
 
@@ -1065,8 +1079,8 @@ def create_question(note_id):
     with _lock:
         db = _get_db()
         db.execute(
-            'INSERT INTO questions (id, note_id, parent_id, content, resolved, created_at) VALUES (?, ?, ?, ?, 0, ?)',
-            (qid, note_id, parent_id, content, now)
+            'INSERT INTO questions (id, note_id, parent_id, content, resolved, created_by, created_at) VALUES (?, ?, ?, ?, 0, ?, ?)',
+            (qid, note_id, parent_id, content, g.current_user, now)
         )
         db.commit()
         row = db.execute('SELECT * FROM questions WHERE id = ?', (qid,)).fetchone()
@@ -1089,6 +1103,25 @@ def _delete_thread_rows(db, table, root_id):
         [(rid,) for rid in to_delete]
     )
     return to_delete
+
+
+@app.route('/api/comments/<cid>', methods=['PATCH'])
+@_require_auth
+@_require_section('notes')
+def edit_comment(cid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '评论内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM comments WHERE id = ?', (cid,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        db.execute('UPDATE comments SET content = ? WHERE id = ?', (content, cid))
+        db.commit()
+        row = db.execute('SELECT * FROM comments WHERE id = ?', (cid,)).fetchone()
+    return jsonify(_comment_to_dict(row))
 
 
 @app.route('/api/comments/<cid>', methods=['DELETE'])
@@ -1116,6 +1149,25 @@ def toggle_resolved(qid):
             return jsonify({'error': '问题不存在'}), 404
         new_val = 0 if row['resolved'] else 1
         db.execute('UPDATE questions SET resolved = ? WHERE id = ?', (new_val, qid))
+        db.commit()
+        row = db.execute('SELECT * FROM questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_question_to_dict(row))
+
+
+@app.route('/api/questions/<qid>', methods=['PATCH'])
+@_require_auth
+@_require_section('notes')
+def edit_question(qid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '问题内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        db.execute('UPDATE questions SET content = ? WHERE id = ?', (content, qid))
         db.commit()
         row = db.execute('SELECT * FROM questions WHERE id = ?', (qid,)).fetchone()
     return jsonify(_question_to_dict(row))
@@ -1458,6 +1510,25 @@ def create_opinion_comment(oid):
     return jsonify(_opinion_comment_to_dict(row))
 
 
+@app.route('/api/opinion-comments/<cid>', methods=['PATCH'])
+@_require_auth
+@_require_section('opinions')
+def edit_opinion_comment(cid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '评论内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM opinion_comments WHERE id = ?', (cid,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        db.execute('UPDATE opinion_comments SET content = ? WHERE id = ?', (content, cid))
+        db.commit()
+        row = db.execute('SELECT * FROM opinion_comments WHERE id = ?', (cid,)).fetchone()
+    return jsonify(_opinion_comment_to_dict(row))
+
+
 @app.route('/api/opinion-comments/<cid>', methods=['DELETE'])
 @_require_auth
 @_require_section('opinions')
@@ -1531,6 +1602,25 @@ def toggle_opinion_question_resolved(qid):
             return jsonify({'error': '问题不存在'}), 404
         new_val = 0 if row['resolved'] else 1
         db.execute('UPDATE opinion_questions SET resolved = ? WHERE id = ?', (new_val, qid))
+        db.commit()
+        row = db.execute('SELECT * FROM opinion_questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_opinion_question_to_dict(row))
+
+
+@app.route('/api/opinion-questions/<qid>', methods=['PATCH'])
+@_require_auth
+@_require_section('opinions')
+def edit_opinion_question(qid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '问题内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM opinion_questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        db.execute('UPDATE opinion_questions SET content = ? WHERE id = ?', (content, qid))
         db.commit()
         row = db.execute('SELECT * FROM opinion_questions WHERE id = ?', (qid,)).fetchone()
     return jsonify(_opinion_question_to_dict(row))
@@ -2074,6 +2164,25 @@ def create_archive_comment(aid):
     return jsonify(_archive_comment_to_dict(row))
 
 
+@app.route('/api/archive-comments/<cid>', methods=['PATCH'])
+@_require_auth
+@_require_section('archives')
+def edit_archive_comment(cid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '评论内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM archive_comments WHERE id = ?', (cid,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        db.execute('UPDATE archive_comments SET content = ? WHERE id = ?', (content, cid))
+        db.commit()
+        row = db.execute('SELECT * FROM archive_comments WHERE id = ?', (cid,)).fetchone()
+    return jsonify(_archive_comment_to_dict(row))
+
+
 @app.route('/api/archive-comments/<cid>', methods=['DELETE'])
 @_require_auth
 @_require_section('archives')
@@ -2133,6 +2242,25 @@ def toggle_archive_question_resolved(qid):
             return jsonify({'error': '问题不存在'}), 404
         new_val = 0 if row['resolved'] else 1
         db.execute('UPDATE archive_questions SET resolved = ? WHERE id = ?', (new_val, qid))
+        db.commit()
+        row = db.execute('SELECT * FROM archive_questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_archive_question_to_dict(row))
+
+
+@app.route('/api/archive-questions/<qid>', methods=['PATCH'])
+@_require_auth
+@_require_section('archives')
+def edit_archive_question(qid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '问题内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM archive_questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        db.execute('UPDATE archive_questions SET content = ? WHERE id = ?', (content, qid))
         db.commit()
         row = db.execute('SELECT * FROM archive_questions WHERE id = ?', (qid,)).fetchone()
     return jsonify(_archive_question_to_dict(row))
@@ -2586,6 +2714,25 @@ def create_project_comment(pid, nid):
     return jsonify(_project_comment_to_dict(row))
 
 
+@app.route('/api/project-comments/<cid>', methods=['PATCH'])
+@_require_auth
+@_require_section('projects')
+def edit_project_comment(cid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '评论内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM project_comments WHERE id = ?', (cid,)).fetchone()
+        if not row:
+            return jsonify({'error': '评论不存在'}), 404
+        db.execute('UPDATE project_comments SET content = ? WHERE id = ?', (content, cid))
+        db.commit()
+        row = db.execute('SELECT * FROM project_comments WHERE id = ?', (cid,)).fetchone()
+    return jsonify(_project_comment_to_dict(row))
+
+
 @app.route('/api/project-comments/<cid>', methods=['DELETE'])
 @_require_auth
 @_require_section('projects')
@@ -2657,6 +2804,25 @@ def toggle_project_question_resolved(qid):
             return jsonify({'error': '问题不存在'}), 404
         new_val = 0 if row['resolved'] else 1
         db.execute('UPDATE project_questions SET resolved = ? WHERE id = ?', (new_val, qid))
+        db.commit()
+        row = db.execute('SELECT * FROM project_questions WHERE id = ?', (qid,)).fetchone()
+    return jsonify(_project_question_to_dict(row))
+
+
+@app.route('/api/project-questions/<qid>', methods=['PATCH'])
+@_require_auth
+@_require_section('projects')
+def edit_project_question(qid):
+    b = request.get_json(force=True) or {}
+    content = str(b.get('content', '')).strip()
+    if not content:
+        return jsonify({'error': '问题内容不能为空'}), 400
+    with _lock:
+        db = _get_db()
+        row = db.execute('SELECT * FROM project_questions WHERE id = ?', (qid,)).fetchone()
+        if not row:
+            return jsonify({'error': '问题不存在'}), 404
+        db.execute('UPDATE project_questions SET content = ? WHERE id = ?', (content, qid))
         db.commit()
         row = db.execute('SELECT * FROM project_questions WHERE id = ?', (qid,)).fetchone()
     return jsonify(_project_question_to_dict(row))
