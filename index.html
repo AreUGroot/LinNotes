@@ -552,6 +552,25 @@ button {
 }
 .topic-new-row input[type="text"] { flex: 1; min-width: 260px; }
 .topic-new-row button { white-space: nowrap; }
+.topic-rename-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.topic-rename-row input[type="text"] { flex: 1; min-width: 200px; }
+.topic-rename-row button { white-space: nowrap; }
+.btn-rename-topic {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: #f7fafc;
+  color: var(--pri);
+  border: 1px solid #c3cbf7;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn-rename-topic:hover { background: #eef0fd; }
 .topic-hint {
   color: var(--sub);
   font-size: 0.8rem;
@@ -1647,6 +1666,11 @@ button {
         <input type="text" id="new-topic-input" placeholder="输入新主题名称，支持多级（如 代数/群论）">
         <button type="button" class="btn-ghost" id="btn-topic-commit-level">确认并继续下一级</button>
       </div>
+      <div class="topic-rename-row" id="topic-rename-row" style="display:none;">
+        <input type="text" id="topic-rename-input" placeholder="输入新名称">
+        <button type="button" class="btn-ghost" id="btn-topic-rename-confirm">确认重命名</button>
+        <button type="button" class="btn-ghost" id="btn-topic-rename-cancel">取消</button>
+      </div>
       <div class="topic-hint" id="topic-current-hint">当前主题：未选择</div>
     </div>
   </div>
@@ -2000,6 +2024,11 @@ button {
         <input type="text" id="arc-new-topic-input" placeholder="输入新主题名称（用 / 分隔子级）">
         <button class="btn-ghost" id="btn-arc-topic-commit-level" type="button">确认并继续下一级</button>
       </div>
+      <div class="topic-rename-row" id="arc-topic-rename-row" style="display:none;">
+        <input type="text" id="arc-topic-rename-input" placeholder="输入新名称">
+        <button type="button" class="btn-ghost" id="btn-arc-topic-rename-confirm">确认重命名</button>
+        <button type="button" class="btn-ghost" id="btn-arc-topic-rename-cancel">取消</button>
+      </div>
       <div class="topic-hint" id="arc-topic-hint"></div>
     </div>
   </div>
@@ -2157,6 +2186,11 @@ button {
       <div class="topic-new-row" id="proj-topic-new-row" style="display:none;">
         <input type="text" id="proj-new-topic-input" placeholder="输入新主题名称，支持多级（如 代数/群论）">
         <button type="button" class="btn-ghost" id="btn-proj-topic-commit-level">确认并继续下一级</button>
+      </div>
+      <div class="topic-rename-row" id="proj-topic-rename-row" style="display:none;">
+        <input type="text" id="proj-topic-rename-input" placeholder="输入新名称">
+        <button type="button" class="btn-ghost" id="btn-proj-topic-rename-confirm">确认重命名</button>
+        <button type="button" class="btn-ghost" id="btn-proj-topic-rename-cancel">取消</button>
       </div>
       <div class="topic-hint" id="proj-topic-current-hint">当前主题：未选择</div>
     </div>
@@ -2941,6 +2975,16 @@ function renderTopicFormSelector() {
     select.innerHTML += '<option value="' + TOPIC_NEW_MARKER + '">' + escapeHtml(newLabel) + '</option>';
     select.value = currentVal;
     container.appendChild(select);
+
+    // Add rename button for selected (non-new) topics
+    if (currentVal && currentVal !== TOPIC_NEW_MARKER && depth < segments.length) {
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'btn-rename-topic';
+      renameBtn.textContent = '重命名';
+      renameBtn.dataset.depth = depth;
+      container.appendChild(renameBtn);
+    }
   }
 
   const newRow = $('topic-new-row');
@@ -5386,6 +5430,17 @@ function renderArcTopicFormSelector() {
     });
     sel.innerHTML += `<option value="__new__">+ 新建</option>`;
     container.appendChild(sel);
+
+    // Add rename button for selected topics
+    if (current && depth < segments.length) {
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'btn-rename-topic';
+      renameBtn.textContent = '重命名';
+      renameBtn.dataset.depth = depth;
+      renameBtn.dataset.mode = 'arc';
+      container.appendChild(renameBtn);
+    }
   }
 
   // Update hint
@@ -5585,8 +5640,19 @@ function renderArcFormDocList() {
   ).join('');
 }
 
+function getArcTopicValueFromForm() {
+  const state = arcTopicFormState;
+  if (state.pendingNewDepth != null) {
+    const parentSegments = (state.segments || []).slice(0, state.pendingNewDepth);
+    const suffixParts = splitTopicPath($('arc-new-topic-input').value);
+    if (!suffixParts.length) return joinTopicPath(parentSegments);
+    return joinTopicPath(parentSegments.concat(suffixParts));
+  }
+  return joinTopicPath(state.segments);
+}
+
 async function saveArchive(opts = {}) {
-  const topic = joinTopicPath(arcTopicFormState.segments);
+  const topic = getArcTopicValueFromForm();
   const content_description = getArcDescValue().trim();
   if (!content_description) {
     showMsg('arc-form-msg', '内容描述及链接不能为空', 'err');
@@ -6203,6 +6269,17 @@ function renderProjTopicFormSelector() {
       });
       sel.innerHTML += `<option value="${TOPIC_NEW_MARKER}">+ 新建</option>`;
       container.appendChild(sel);
+
+      // Add rename button
+      if (currentSeg) {
+        const renameBtn = document.createElement('button');
+        renameBtn.type = 'button';
+        renameBtn.className = 'btn-rename-topic';
+        renameBtn.textContent = '重命名';
+        renameBtn.dataset.depth = depth;
+        renameBtn.dataset.mode = 'proj';
+        container.appendChild(renameBtn);
+      }
     } else {
       // Skip if new input is shown at this depth
       if (state.pendingNewDepth === depth) break;
@@ -6259,6 +6336,12 @@ function commitProjPendingTopic() {
 
 function getProjTopicValueFromForm() {
   const state = projTopicFormState;
+  if (state.pendingNewDepth != null) {
+    const parentSegments = (state.segments || []).slice(0, state.pendingNewDepth);
+    const suffixParts = splitTopicPath($('proj-new-topic-input').value);
+    if (!suffixParts.length) return joinTopicPath(parentSegments);
+    return joinTopicPath(parentSegments.concat(suffixParts));
+  }
   if (!state.segments.length) return '';
   return joinTopicPath(state.segments);
 }
@@ -6925,6 +7008,47 @@ $('btn-topic-commit-level').addEventListener('click', () => {
   renderTopicFormSelector();
 });
 
+// ── Topic rename (notes) ──
+let _topicRenameState = null; // { depth, oldSegment, mode }
+
+$('topic-levels').addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-rename-topic');
+  if (!btn) return;
+  const depth = parseInt(btn.dataset.depth);
+  const seg = topicFormState.segments[depth];
+  if (!seg) return;
+  _topicRenameState = { depth, oldSegment: seg, mode: 'notes' };
+  $('topic-rename-input').value = seg;
+  $('topic-rename-row').style.display = '';
+  $('topic-rename-input').focus();
+});
+
+$('btn-topic-rename-confirm').addEventListener('click', async () => {
+  if (!_topicRenameState || _topicRenameState.mode !== 'notes') return;
+  const newName = $('topic-rename-input').value.trim();
+  if (!newName) return;
+  const { depth, oldSegment } = _topicRenameState;
+  const oldFull = joinTopicPath(topicFormState.segments.slice(0, depth + 1));
+  const newSegments = topicFormState.segments.slice();
+  newSegments[depth] = newName;
+  const newFull = joinTopicPath(newSegments.slice(0, depth + 1));
+  await apiFetch('/api/topics/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ old_name: oldFull, new_name: newFull }),
+  });
+  topicFormState.segments[depth] = newName;
+  _topicRenameState = null;
+  $('topic-rename-row').style.display = 'none';
+  await loadAllData();
+  renderTopicFormSelector();
+});
+
+$('btn-topic-rename-cancel').addEventListener('click', () => {
+  _topicRenameState = null;
+  $('topic-rename-row').style.display = 'none';
+});
+
 $('filter-topic').addEventListener('change', loadNotes);
 $('filter-tag').addEventListener('change', loadNotes);
 $('filter-sort').addEventListener('change', loadNotes);
@@ -7099,6 +7223,45 @@ $('btn-arc-topic-commit-level').addEventListener('click', () => {
   // Continue to next level
   arcTopicFormState.pendingNewDepth = arcTopicFormState.segments.length;
   renderArcTopicFormSelector();
+});
+
+// Archive topic rename
+$('arc-topic-levels').addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-rename-topic');
+  if (!btn || btn.dataset.mode !== 'arc') return;
+  const depth = parseInt(btn.dataset.depth);
+  const seg = arcTopicFormState.segments[depth];
+  if (!seg) return;
+  _topicRenameState = { depth, oldSegment: seg, mode: 'arc' };
+  $('arc-topic-rename-input').value = seg;
+  $('arc-topic-rename-row').style.display = '';
+  $('arc-topic-rename-input').focus();
+});
+
+$('btn-arc-topic-rename-confirm').addEventListener('click', async () => {
+  if (!_topicRenameState || _topicRenameState.mode !== 'arc') return;
+  const newName = $('arc-topic-rename-input').value.trim();
+  if (!newName) return;
+  const { depth } = _topicRenameState;
+  const oldFull = joinTopicPath(arcTopicFormState.segments.slice(0, depth + 1));
+  const newSegments = arcTopicFormState.segments.slice();
+  newSegments[depth] = newName;
+  const newFull = joinTopicPath(newSegments.slice(0, depth + 1));
+  await apiFetch('/api/topics/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ old_name: oldFull, new_name: newFull }),
+  });
+  arcTopicFormState.segments[depth] = newName;
+  _topicRenameState = null;
+  $('arc-topic-rename-row').style.display = 'none';
+  await loadAllData();
+  renderArcTopicFormSelector();
+});
+
+$('btn-arc-topic-rename-cancel').addEventListener('click', () => {
+  _topicRenameState = null;
+  $('arc-topic-rename-row').style.display = 'none';
 });
 
 // Archive tag selector
@@ -7310,6 +7473,45 @@ $('btn-proj-topic-commit-level').addEventListener('click', () => {
   // Continue to next level
   projTopicFormState.pendingNewDepth = projTopicFormState.segments.length;
   renderProjTopicFormSelector();
+});
+
+// Project topic rename
+$('proj-topic-levels').addEventListener('click', (e) => {
+  const btn = e.target.closest('.btn-rename-topic');
+  if (!btn || btn.dataset.mode !== 'proj') return;
+  const depth = parseInt(btn.dataset.depth);
+  const seg = projTopicFormState.segments[depth];
+  if (!seg) return;
+  _topicRenameState = { depth, oldSegment: seg, mode: 'proj' };
+  $('proj-topic-rename-input').value = seg;
+  $('proj-topic-rename-row').style.display = '';
+  $('proj-topic-rename-input').focus();
+});
+
+$('btn-proj-topic-rename-confirm').addEventListener('click', async () => {
+  if (!_topicRenameState || _topicRenameState.mode !== 'proj') return;
+  const newName = $('proj-topic-rename-input').value.trim();
+  if (!newName) return;
+  const { depth } = _topicRenameState;
+  const oldFull = joinTopicPath(projTopicFormState.segments.slice(0, depth + 1));
+  const newSegments = projTopicFormState.segments.slice();
+  newSegments[depth] = newName;
+  const newFull = joinTopicPath(newSegments.slice(0, depth + 1));
+  await apiFetch('/api/projects/' + currentProjectId + '/topics/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ old_name: oldFull, new_name: newFull }),
+  });
+  projTopicFormState.segments[depth] = newName;
+  _topicRenameState = null;
+  $('proj-topic-rename-row').style.display = 'none';
+  await loadProjectTopics();
+  renderProjTopicFormSelector();
+});
+
+$('btn-proj-topic-rename-cancel').addEventListener('click', () => {
+  _topicRenameState = null;
+  $('proj-topic-rename-row').style.display = 'none';
 });
 
 // Project tag selector

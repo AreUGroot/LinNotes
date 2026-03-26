@@ -793,6 +793,94 @@ def create_topic():
     return jsonify({'id': row['id'], 'name': row['name']})
 
 
+@app.route('/api/topics/rename', methods=['POST'])
+@_require_auth
+def rename_topic():
+    b = request.get_json(force=True) or {}
+    old_name = str(b.get('old_name', '')).strip()
+    new_name = str(b.get('new_name', '')).strip()
+    if not old_name or not new_name:
+        return jsonify({'error': '主题名称不能为空'}), 400
+    if old_name == new_name:
+        return jsonify({'status': 'ok', 'updated': 0})
+    with _lock:
+        db = _get_db()
+        updated = 0
+        # Rename exact match and all children (prefix match with " / ")
+        # e.g. renaming "数学" also renames "数学 / 代数" → "新名 / 代数"
+        old_prefix = old_name + ' / '
+        # Update topics table
+        rows = db.execute('SELECT id, name FROM topics').fetchall()
+        for r in rows:
+            if r['name'] == old_name:
+                db.execute('UPDATE topics SET name = ? WHERE id = ?', (new_name, r['id']))
+            elif r['name'].startswith(old_prefix):
+                new_child = new_name + ' / ' + r['name'][len(old_prefix):]
+                db.execute('UPDATE topics SET name = ? WHERE id = ?', (new_child, r['id']))
+        # Update all content tables that reference topics
+        for table in ('notes', 'opinions', 'archives'):
+            db.execute(
+                f"UPDATE {table} SET topic = ? WHERE topic = ?",
+                (new_name, old_name)
+            )
+            cnt = db.execute('SELECT changes()').fetchone()[0]
+            updated += cnt
+            # Update children topics
+            rows2 = db.execute(
+                f"SELECT id, topic FROM {table} WHERE topic LIKE ?",
+                (old_prefix + '%',)
+            ).fetchall()
+            for r2 in rows2:
+                new_child = new_name + ' / ' + r2['topic'][len(old_prefix):]
+                db.execute(f"UPDATE {table} SET topic = ? WHERE id = ?", (new_child, r2['id']))
+                updated += 1
+        db.commit()
+    return jsonify({'status': 'ok', 'updated': updated})
+
+
+@app.route('/api/projects/<pid>/topics/rename', methods=['POST'])
+@_require_auth
+@_require_section('projects')
+def rename_project_topic(pid):
+    b = request.get_json(force=True) or {}
+    old_name = str(b.get('old_name', '')).strip()
+    new_name = str(b.get('new_name', '')).strip()
+    if not old_name or not new_name:
+        return jsonify({'error': '主题名称不能为空'}), 400
+    if old_name == new_name:
+        return jsonify({'status': 'ok', 'updated': 0})
+    with _lock:
+        db = _get_db()
+        if not _check_project_member(db, pid, g.current_user):
+            return jsonify({'error': '无权访问此项目'}), 403
+        updated = 0
+        old_prefix = old_name + ' / '
+        # Update project_topics table
+        rows = db.execute('SELECT rowid, name FROM project_topics WHERE project_id = ?', (pid,)).fetchall()
+        for r in rows:
+            if r['name'] == old_name:
+                db.execute('UPDATE project_topics SET name = ? WHERE rowid = ?', (new_name, r['rowid']))
+            elif r['name'].startswith(old_prefix):
+                new_child = new_name + ' / ' + r['name'][len(old_prefix):]
+                db.execute('UPDATE project_topics SET name = ? WHERE rowid = ?', (new_child, r['rowid']))
+        # Update project_notes
+        db.execute(
+            "UPDATE project_notes SET topic = ? WHERE project_id = ? AND topic = ?",
+            (new_name, pid, old_name)
+        )
+        updated += db.execute('SELECT changes()').fetchone()[0]
+        rows2 = db.execute(
+            "SELECT id, topic FROM project_notes WHERE project_id = ? AND topic LIKE ?",
+            (pid, old_prefix + '%')
+        ).fetchall()
+        for r2 in rows2:
+            new_child = new_name + ' / ' + r2['topic'][len(old_prefix):]
+            db.execute("UPDATE project_notes SET topic = ? WHERE id = ?", (new_child, r2['id']))
+            updated += 1
+        db.commit()
+    return jsonify({'status': 'ok', 'updated': updated})
+
+
 # ── 标签 API ─────────────────────────────────────────────────────────────────
 @app.route('/api/tags', methods=['GET'])
 @_require_auth
