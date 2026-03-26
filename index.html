@@ -4056,7 +4056,7 @@ function buildOutline(treeId, outlineId, bodyEl) {
     label.addEventListener('click', () => {
       const target = document.getElementById(node.id);
       if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        target.scrollIntoView({ behavior: 'instant', block: 'start' });
         // Highlight active
         treeEl.querySelectorAll('.outline-item.active').forEach(el => el.classList.remove('active'));
         itemDiv.classList.add('active');
