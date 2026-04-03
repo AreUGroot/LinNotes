@@ -2495,7 +2495,13 @@ function focusNoteEditor() {
 function insertMarkdownToNoteEditor(md) {
   if (noteVditor && typeof noteVditor.insertValue === 'function') {
     try {
-      noteVditor.insertValue(md);
+      noteVditor.focus();
+      if (noteVditor.getCurrentMode() === 'wysiwyg' && /^!\[.*\]\(.*\)$/.test(md.trim())) {
+        const m = md.trim().match(/^!\[(.*?)\]\((.*?)\)$/);
+        document.execCommand('insertHTML', false, '<img alt="' + (m[1]||'image') + '" src="' + m[2] + '">\n');
+      } else {
+        noteVditor.insertValue(md);
+      }
       syncHiddenNoteEditorValueFromVditor();
       return true;
     } catch (e) {}
@@ -2621,27 +2627,63 @@ function vditorToggleFind(vditorEl) {
   findInput.focus();
 }
 
+function _vditorUploadImage(file, getVditor, savedRange) {
+  const formData = new FormData();
+  formData.append('image', file);
+  apiFetch('/api/upload', { method: 'POST', body: formData })
+    .then(r => r.json())
+    .then(d => {
+      if (d.url) {
+        const vd = getVditor();
+        if (!vd) return;
+        if (savedRange) {
+          const s = window.getSelection();
+          s.removeAllRanges();
+          s.addRange(savedRange);
+        } else {
+          vd.focus();
+        }
+        const isWysiwyg = vd.getCurrentMode() === 'wysiwyg';
+        const html = isWysiwyg
+          ? '<img alt="image" src="' + d.url + '">\n'
+          : '![image](' + d.url + ')\n';
+        document.execCommand('insertHTML', false, html);
+      } else alert(d.error || '图片上传失败');
+    })
+    .catch(() => alert('图片上传失败'));
+}
+
 function createVditorUpload(getVditor) {
   return {
     accept: 'image/*',
     handler(files) {
       const vd = getVditor();
       if (!vd) return null;
+      const sel = window.getSelection();
+      const savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
       Array.from(files).forEach(file => {
         if (!file.type.startsWith('image/')) return;
-        const formData = new FormData();
-        formData.append('image', file);
-        apiFetch('/api/upload', { method: 'POST', body: formData })
-          .then(r => r.json())
-          .then(d => {
-            if (d.url) vd.insertValue('![image](' + d.url + ')\n');
-            else alert(d.error || '图片上传失败');
-          })
-          .catch(() => alert('图片上传失败'));
+        _vditorUploadImage(file, getVditor, savedRange);
       });
       return null;
     }
   };
+}
+
+function setupVditorPasteUpload(containerId, getVditor) {
+  const el = document.getElementById(containerId);
+  if (!el) return;
+  el.addEventListener('paste', function(event) {
+    const files = event.clipboardData && event.clipboardData.files;
+    if (!files || files.length === 0) return;
+    const imageFile = Array.from(files).find(f => f.type.startsWith('image/'));
+    if (!imageFile) return;
+    event.stopPropagation();
+    event.preventDefault();
+    const sel = window.getSelection();
+    const savedRange = sel && sel.rangeCount > 0 ? sel.getRangeAt(0).cloneRange() : null;
+    _vditorUploadImage(imageFile, getVditor, savedRange);
+  }, true);
 }
 
 function ensureNoteVditor() {
@@ -2689,6 +2731,7 @@ function ensureNoteVditor() {
       },
       after() {
         toggleNoteEditorMode(true);
+        setupVditorPasteUpload('note-editor-vditor', () => noteVditor);
         try {
           noteVditor.setValue(noteVditorPendingValue || $('note-editor-md').value || '');
           syncHiddenNoteEditorValueFromVditor();
@@ -2750,6 +2793,7 @@ function ensureOpVditor() {
       },
       after() {
         if (shell) shell.classList.add('active');
+        setupVditorPasteUpload('op-editor-vditor', () => opVditor);
         try {
           opVditor.setValue(opVditorPendingValue || $('op-editor-md').value || '');
         } catch (e) {}
@@ -2813,6 +2857,7 @@ function ensureArcDescVditor() {
       input(value) { $('arc-content-description').value = value; },
       after() {
         if (shell) shell.classList.add('active');
+        setupVditorPasteUpload('arc-desc-vditor', () => arcDescVditor);
         try { arcDescVditor.setValue(arcDescVditorPendingValue || $('arc-content-description').value || ''); } catch (e) {}
       },
     });
@@ -6529,6 +6574,7 @@ function ensureProjVditor() {
       input(value) { $('proj-note-editor-md').value = value; },
       after() {
         if (shell) shell.classList.add('active');
+        setupVditorPasteUpload('proj-note-editor-vditor', () => projVditor);
         try {
           projVditor.setValue(projVditorPendingValue || $('proj-note-editor-md').value || '');
         } catch (e) {}
@@ -6881,7 +6927,14 @@ async function projUploadImageAndInsert(file) {
   const res = await apiFetch('/api/upload', { method: 'POST', body: fd });
   if (res.ok) {
     const d = await res.json();
-    if (projVditor) projVditor.insertValue(`![${file.name}](${d.url})\n`);
+    if (projVditor) {
+      projVditor.focus();
+      const isWysiwyg = projVditor.getCurrentMode() === 'wysiwyg';
+      const html = isWysiwyg
+        ? `<img alt="${file.name}" src="${d.url}">\n`
+        : `![${file.name}](${d.url})\n`;
+      document.execCommand('insertHTML', false, html);
+    }
   }
 }
 
