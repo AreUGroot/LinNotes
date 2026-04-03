@@ -2621,6 +2621,29 @@ function vditorToggleFind(vditorEl) {
   findInput.focus();
 }
 
+function createVditorUpload(getVditor) {
+  return {
+    accept: 'image/*',
+    handler(files) {
+      const vd = getVditor();
+      if (!vd) return null;
+      Array.from(files).forEach(file => {
+        if (!file.type.startsWith('image/')) return;
+        const formData = new FormData();
+        formData.append('image', file);
+        apiFetch('/api/upload', { method: 'POST', body: formData })
+          .then(r => r.json())
+          .then(d => {
+            if (d.url) vd.insertValue('![image](' + d.url + ')\n');
+            else alert(d.error || '图片上传失败');
+          })
+          .catch(() => alert('图片上传失败'));
+      });
+      return null;
+    }
+  };
+}
+
 function ensureNoteVditor() {
   if (noteVditor) {
     toggleNoteEditorMode(true);
@@ -2656,6 +2679,7 @@ function ensureNoteVditor() {
         "fullscreen","edit-mode",
         {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
       ],
+      upload: createVditorUpload(() => noteVditor),
       preview: {
         math: { engine: 'KaTeX' },
         theme: { current: _dk ? 'dark' : 'light' },
@@ -2716,6 +2740,7 @@ function ensureOpVditor() {
         "fullscreen","edit-mode",
         {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
       ],
+      upload: createVditorUpload(() => opVditor),
       preview: {
         math: { engine: 'KaTeX' },
         theme: { current: _dk2 ? 'dark' : 'light' },
@@ -2783,6 +2808,7 @@ function ensureArcDescVditor() {
         "fullscreen","edit-mode",
         {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
       ],
+      upload: createVditorUpload(() => arcDescVditor),
       preview: { math: { engine: 'KaTeX' }, theme: { current: _dk3 ? 'dark' : 'light' } },
       input(value) { $('arc-content-description').value = value; },
       after() {
@@ -6498,6 +6524,7 @@ function ensureProjVditor() {
         "fullscreen","edit-mode",
         {name:"more",toolbar:["both","code-theme","content-theme","export","outline","preview","devtools","info","help"]},
       ],
+      upload: createVditorUpload(() => projVditor),
       preview: { math: { engine: 'KaTeX' }, theme: { current: _dk4 ? 'dark' : 'light' } },
       input(value) { $('proj-note-editor-md').value = value; },
       after() {
@@ -6869,33 +6896,32 @@ function downloadMarkdown(filename, content) {
 }
 
 async function downloadDetail(type) {
-  let url, titleField;
+  let url;
   if (type === 'note') {
     if (!viewingNoteId) return;
-    url = '/api/notes/' + viewingNoteId;
+    url = '/api/export/notes/' + viewingNoteId;
   } else if (type === 'opinion') {
     if (!viewingOpinionId) return;
-    url = '/api/opinions/' + viewingOpinionId;
+    url = '/api/export/opinions/' + viewingOpinionId;
   } else if (type === 'archive') {
     if (!viewingArchiveId) return;
-    url = '/api/archives/' + viewingArchiveId;
+    url = '/api/export/archives/' + viewingArchiveId;
   } else if (type === 'project-note') {
     if (!currentProjectId || !viewingProjNoteId) return;
-    url = '/api/projects/' + currentProjectId + '/notes/' + viewingProjNoteId;
+    url = '/api/export/projects/' + currentProjectId + '/notes/' + viewingProjNoteId;
   }
   try {
     const res = await apiFetch(url);
     if (!res.ok) return;
-    const d = await res.json();
-    const title = d.title || '无标题';
-    const body = d.content || d.content_description || '';
-    let md = '# ' + title + '\n\n';
-    if (d.topic) md += '> 主题: ' + d.topic + '\n\n';
-    if (d.type) md += '> 类型: ' + d.type + '\n\n';
-    if (d.tags && d.tags.length) md += '> 标签: ' + d.tags.join(', ') + '\n\n';
-    if (d.author) md += '> 作者: ' + d.author + '\n\n';
-    md += body;
-    downloadMarkdown(title, md);
+    const blob = await res.blob();
+    const disp = res.headers.get('content-disposition') || '';
+    const m = disp.match(/filename\*?=(?:UTF-8''|")([^";]+)/i);
+    const filename = m ? decodeURIComponent(m[1].replace(/"+$/, '')) : 'download';
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
   } catch (e) {}
 }
 

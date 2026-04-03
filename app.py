@@ -1,15 +1,18 @@
+import io
 import json
 import os
+import re
 import secrets
 import sqlite3
 import threading
 import time
 import uuid
+import zipfile as zipmod
 from collections import defaultdict
 from datetime import datetime, timezone
 from functools import wraps
 
-from flask import Flask, g, jsonify, request, send_from_directory
+from flask import Flask, g, jsonify, request, send_file, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__, static_folder='.', static_url_path='')
@@ -1836,6 +1839,84 @@ def upload_image():
         out.write(data)
 
     return jsonify({'status': 'ok', 'url': f'/data/images/{filename}'})
+
+
+# ── 导出 (Markdown + 图片 ZIP) API ─────────────────────────────────────────
+_IMG_RE = re.compile(r'!\[([^\]]*)\]\((/data/images/([^)]+))\)')
+
+@app.route('/api/export/notes/<item_id>')
+@app.route('/api/export/opinions/<item_id>')
+@app.route('/api/export/archives/<item_id>')
+@app.route('/api/export/projects/<project_id>/notes/<item_id>')
+@_require_auth
+def export_item(item_id, project_id=None):
+    db = _get_db()
+    rule = request.url_rule.rule
+
+    if 'projects' in rule:
+        row = db.execute('SELECT * FROM project_notes WHERE id=? AND project_id=?',
+                         (item_id, project_id)).fetchone()
+        tags = _project_note_tags(db, item_id) if row else []
+        body_field = 'content'
+    elif '/notes/' in rule:
+        row = db.execute('SELECT * FROM notes WHERE id=?', (item_id,)).fetchone()
+        tags = _note_tags(db, item_id) if row else []
+        body_field = 'content'
+    elif '/opinions/' in rule:
+        row = db.execute('SELECT * FROM opinions WHERE id=?', (item_id,)).fetchone()
+        tags = []
+        body_field = 'content'
+    elif '/archives/' in rule:
+        row = db.execute('SELECT * FROM archives WHERE id=?', (item_id,)).fetchone()
+        tags = _archive_tags(db, item_id) if row else []
+        body_field = 'content_description'
+    else:
+        return jsonify({'error': 'invalid section'}), 400
+
+    if not row:
+        return jsonify({'error': 'not found'}), 404
+
+    title = row['title'] or '无标题'
+    body = row[body_field] or ''
+
+    md = '# ' + title + '\n\n'
+    topic = row['topic'] if 'topic' in row.keys() else None
+    rtype = row['type'] if 'type' in row.keys() else None
+    author = row['author'] if 'author' in row.keys() else None
+    if topic:  md += '> 主题: ' + topic + '\n\n'
+    if rtype:  md += '> 类型: ' + rtype + '\n\n'
+    if tags:   md += '> 标签: ' + ', '.join(tags) + '\n\n'
+    if author: md += '> 作者: ' + author + '\n\n'
+    md += body
+
+    matches = _IMG_RE.findall(md)
+    safe_title = re.sub(r'[/\\:*?"<>|]', '_', title)
+
+    if not matches:
+        buf = io.BytesIO(md.encode('utf-8'))
+        return send_file(buf, mimetype='text/markdown; charset=utf-8',
+                         as_attachment=True,
+                         download_name=safe_title + '.md')
+
+    md_rewritten = md
+    for _alt, full_path, fname in matches:
+        md_rewritten = md_rewritten.replace(full_path, './images/' + fname)
+
+    buf = io.BytesIO()
+    with zipmod.ZipFile(buf, 'w', zipmod.ZIP_DEFLATED) as zf:
+        zf.writestr(safe_title + '.md', md_rewritten)
+        seen = set()
+        for _alt, _fp, fname in matches:
+            if fname in seen:
+                continue
+            seen.add(fname)
+            fpath = os.path.join(IMAGES_DIR, fname)
+            if os.path.isfile(fpath):
+                zf.write(fpath, 'images/' + fname)
+    buf.seek(0)
+    return send_file(buf, mimetype='application/zip',
+                     as_attachment=True,
+                     download_name=safe_title + '.zip')
 
 
 # ── 权限 API ─────────────────────────────────────────────────────────────────
